@@ -1,0 +1,51 @@
+@import "tailwindcss";
+
+@theme {
+  --font-sans: "Inter", ui-sans-serif, system-ui, sans-serif;
+  --font-display: "Space Grotesk", system-ui, sans-serif;
+  --font-mono: "JetBrains Mono", ui-monospace, SFMono-Regular, monospace;
+  
+  --color-blue-300: #ff8e3c;
+  --color-blue-400: #ff6900;
+  --color-blue-500: #004A99;
+  --color-blue-600: #003773;
+  --color-blue-700: #00254f;
+  
+  --color-brand-orange: #ff6900;
+  --color-brand-blue: #004A99;
+  --color-brand-emerald: #10b981;
+}
+
+@layer utilities {
+  /* Infinite Scroll Animation for Bank Lenders */
+  @keyframes marquee {
+    0% { transform: translateX(0); }
+    100% { transform: translateX(-50%); }
+  }
+
+  .animate-marquee {
+    display: flex;
+    width: max-content;
+    animation: marquee 25s linear infinite;
+  }
+}
+
+/* Custom Scrollbar */
+::-webkit-scrollbar {
+  width: 8px;
+}
+::-webkit-scrollbar-track {
+  background: #09090b;
+}
+::-webkit-scrollbar-thumb {
+  background: #27272a;
+  border-radius: 4px;
+}
+::-webkit-scrollbar-thumb:hover {
+  background: #3f3f46;
+}
+
+body {
+  overflow-x: hidden;
+  background-color: #000;
+}

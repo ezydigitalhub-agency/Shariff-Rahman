@@ -1,0 +1,27 @@
+{
+  "entities": {
+    "submissions": {
+      "title": "Contact Form Submissions",
+      "description": "Contact form submissions and mortgage inquiries",
+      "type": "object",
+      "properties": {
+        "id": { "type": "string" },
+        "name": { "type": "string" },
+        "email": { "type": "string" },
+        "phone": { "type": "string" },
+        "loanType": { "type": "string" },
+        "loanAmount": { "type": "string" },
+        "message": { "type": "string" },
+        "syncedToSheet": { "type": "boolean" },
+        "createdAt": { "type": "string", "format": "date-time" }
+      },
+      "required": ["name", "email", "phone"]
+    }
+  },
+  "firestore": {
+    "submissions/{submissionId}": {
+      "schema": "submissions",
+      "description": "Collection tracking form inputs and refinancing requests"
+    }
+  }
+}

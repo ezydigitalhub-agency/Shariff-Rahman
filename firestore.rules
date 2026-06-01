@@ -1,0 +1,34 @@
+rules_version = '2';
+service cloud.firestore {
+  match /databases/{database}/documents {
+    
+    // Global Safety Net Default Deny
+    match /{document=**} {
+      allow read, write: if false;
+    }
+
+    // Submissions Rule Block
+    match /submissions/{submissionId} {
+      allow create: if isValidSubmission(request.resource.data)
+                    && request.resource.data.syncedToSheet == false
+                    && request.resource.data.createdAt == request.time;
+                    
+      // Only authenticated admins/users can list, read, edit or prune submissions
+      allow read, update, delete: if isSignedIn();
+    }
+
+    // Secure global helpers
+    function isSignedIn() {
+      return request.auth != null;
+    }
+
+    function isValidSubmission(data) {
+      return data.name is string && data.name.size() > 0 && data.name.size() <= 100
+          && data.email is string && data.email.size() > 0 && data.email.size() <= 150
+          && data.phone is string && data.phone.size() > 0 && data.phone.size() <= 30
+          && data.loanType is string && data.loanType.size() <= 100
+          && data.loanAmount is string && data.loanAmount.size() <= 100
+          && data.message is string && data.message.size() <= 2000;
+    }
+  }
+}
