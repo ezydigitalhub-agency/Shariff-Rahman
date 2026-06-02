@@ -25,11 +25,35 @@ import LendersSlider from "./components/LendersSlider";
 import ExperienceGrid from "./components/ExperienceGrid";
 import QualificationsGrid from "./components/QualificationsGrid";
 import ContactForm from "./components/ContactForm";
+import AdminPanel from "./components/AdminPanel";
 
 export default function App() {
+  const [isAdminPage, setIsAdminPage] = useState(() => {
+    return window.location.pathname.toLowerCase() === "/adminpanel";
+  });
   const [isLoading, setIsLoading] = useState(true);
   const [activeSection, setActiveSection] = useState("hero");
   const [activeServiceTab, setActiveServiceTab] = useState<"loans" | "support">("loans");
+
+  // Synchronize path state changes
+  useEffect(() => {
+    const handleLocationChange = () => {
+      setIsAdminPage(window.location.pathname.toLowerCase() === "/adminpanel");
+    };
+    window.addEventListener("popstate", handleLocationChange);
+    return () => window.removeEventListener("popstate", handleLocationChange);
+  }, []);
+
+  const navigateTo = (path: string) => {
+    window.history.pushState({}, "", path);
+    setIsAdminPage(path.toLowerCase() === "/adminpanel");
+    window.scrollTo({ top: 0, behavior: "smooth" });
+  };
+
+  // Render Admin Layout Standalone
+  if (isAdminPage) {
+    return <AdminPanel onBackToHome={() => navigateTo("/")} />;
+  }
 
   // Handle Initial Entrance Loader
   useEffect(() => {
@@ -468,12 +492,14 @@ export default function App() {
 
           <div className="border-t border-zinc-900 pt-8 flex flex-col sm:flex-row justify-between items-center gap-4 text-[11px]">
             <p>© 2026 Mortgage Broker Assist (MBAT) & Shariff Rahman. All Rights Reserved.</p>
-            <div className="flex gap-4">
+            <div className="flex gap-4 items-center">
               <a href="#hero" onClick={(e) => { e.preventDefault(); window.scrollTo({ top: 0, behavior: "smooth" }); }} className="hover:text-white transition">Top</a>
               <span className="text-zinc-800">•</span>
               <a href="tel:0412028735" className="hover:text-white transition">0412 028 735</a>
               <span className="text-zinc-800">•</span>
               <a href="#contact" onClick={(e) => { e.preventDefault(); handleScrollToSection("contact"); }} className="hover:text-white transition">Free Audit</a>
+              <span className="text-zinc-800">•</span>
+              <button onClick={() => navigateTo("/adminpanel")} className="text-zinc-500 hover:text-[#ff6900] transition cursor-pointer border-none bg-transparent p-0 font-medium text-[11px]">Admin Login</button>
             </div>
           </div>
 
