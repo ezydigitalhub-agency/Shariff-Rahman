@@ -22,7 +22,17 @@ import {
   DollarSign,
   Briefcase,
   HelpCircle,
-  Bell
+  Bell,
+  ChevronRight,
+  Plus,
+  Percent,
+  Check,
+  Printer,
+  Eye,
+  EyeOff,
+  LayoutDashboard,
+  CreditCard,
+  Receipt
 } from "lucide-react";
 import { 
   db,
@@ -33,6 +43,10 @@ import {
   Submission
 } from "../lib/firebase";
 import { doc, deleteDoc, updateDoc } from "firebase/firestore";
+import UserManagement from "./UserManagement";
+import IncomeTracker from "./IncomeTracker";
+import ExpenseTracker from "./ExpenseTracker";
+import InvoicingSystem from "./InvoicingSystem";
 
 interface AdminPanelProps {
   onBackToHome: () => void;
@@ -80,6 +94,114 @@ export default function AdminPanel({ onBackToHome }: AdminPanelProps) {
   useEffect(() => {
     localStorage.setItem("mag_admin_password", activeAdminPassword);
   }, [activeAdminPassword]);
+
+  // Tab navigation state
+  const [activeTab, setActiveTab] = useState<"overview" | "users" | "income" | "expense" | "invoices">("overview");
+
+  // User Management State
+  const [adminUsers, setAdminUsers] = useState<any[]>(() => {
+    const saved = localStorage.getItem("mag_admin_users");
+    if (saved) return JSON.parse(saved);
+    return [
+      { id: "u-1", name: "Shariff Rahman", email: "shariff@mortgagebrokerassist.com.au", role: "Principal Broker", allowedMenus: ["overview", "income", "expense", "invoices"] },
+      { id: "u-2", name: "Assist Team Support", "email": "assist@mortgagebrokerassist.com.au", role: "Administrative Assistant", allowedMenus: ["overview", "invoices"] },
+      { id: "u-3", name: "External Auditor", "email": "audits@ezydigitalhub.com", role: "Financial Accountant", allowedMenus: ["income", "expense"] }
+    ];
+  });
+
+  useEffect(() => {
+    localStorage.setItem("mag_admin_users", JSON.stringify(adminUsers));
+  }, [adminUsers]);
+
+  // Add User Form States
+  const [showAddUserForm, setShowAddUserForm] = useState(false);
+  const [newUserName, setNewUserName] = useState("");
+  const [newUserEmail, setNewUserEmail] = useState("");
+  const [newUserRole, setNewUserRole] = useState("Administrative Assistant");
+  const [newUserAllowedMenus, setNewUserAllowedMenus] = useState<string[]>(["overview"]);
+
+  // Income State
+  const [incomeItems, setIncomeItems] = useState<any[]>(() => {
+    const saved = localStorage.getItem("mag_income_items");
+    if (saved) return JSON.parse(saved);
+    return [
+      { id: "inc-1", date: "2026-05-15", client: "James & Sarah Harrison Home Loan", amount: 6200, brokerageRate: 0.65, category: "Upfront Commission", status: "Paid", notes: "Settled with St. George. Capital count: $950,000" },
+      { id: "inc-2", date: "2026-05-28", client: "Liam O'Connor Refinance Deal", amount: 2850, brokerageRate: 0.55, category: "Upfront Commission", status: "Paid", notes: "Macquarie Bank refinance. Fast clearance." },
+      { id: "inc-3", date: "2026-06-01", client: "Emily Watson First Home Buyer ACT", amount: 4850, brokerageRate: 0.65, category: "Upfront Commission", status: "Pending", notes: "Approved by Commonwealth Bank. Settling mid June." }
+    ];
+  });
+
+  useEffect(() => {
+    localStorage.setItem("mag_income_items", JSON.stringify(incomeItems));
+  }, [incomeItems]);
+
+  // Add Income Form States
+  const [showAddIncomeForm, setShowAddIncomeForm] = useState(false);
+  const [incClient, setIncClient] = useState("");
+  const [incDate, setIncDate] = useState(() => new Date().toISOString().split("T")[0]);
+  const [incAmount, setIncAmount] = useState("");
+  const [incRate, setIncRate] = useState("0.65");
+  const [incCategory, setIncCategory] = useState("Upfront Commission");
+  const [incStatus, setIncStatus] = useState("Paid");
+  const [incNotes, setIncNotes] = useState("");
+
+  // Expense State
+  const [expenseItems, setExpenseItems] = useState<any[]>(() => {
+    const saved = localStorage.getItem("mag_expense_items");
+    if (saved) return JSON.parse(saved);
+    return [
+      { id: "exp-1", date: "2026-05-02", category: "Software Licences", amount: 420, payee: "NextGen Aggregator Platform", description: "Lending CRM monthly membership quota subscription" },
+      { id: "exp-2", date: "2026-05-10", category: "Compliance & Training", amount: 180, payee: "MFAA Association", description: "National compliance seminar attendance fee" },
+      { id: "exp-3", date: "2026-05-20", category: "Marketing Ads", amount: 1250, payee: "Google Search Campaigns", description: "Canberra home loan buyer keyword outreach ads" }
+    ];
+  });
+
+  useEffect(() => {
+    localStorage.setItem("mag_expense_items", JSON.stringify(expenseItems));
+  }, [expenseItems]);
+
+  // Add Expense Form States
+  const [showAddExpenseForm, setShowAddExpenseForm] = useState(false);
+  const [expDate, setExpDate] = useState(() => new Date().toISOString().split("T")[0]);
+  const [expCategory, setExpCategory] = useState("Software Licences");
+  const [expAmount, setExpAmount] = useState("");
+  const [expPayee, setExpPayee] = useState("");
+  const [expDesc, setExpDesc] = useState("");
+
+  // Invoicing State
+  const [invoiceItems, setInvoiceItems] = useState<any[]>(() => {
+    const saved = localStorage.getItem("mag_invoice_items");
+    if (saved) return JSON.parse(saved);
+    return [
+      { id: "INV-2026-001", date: "2026-05-08", dueDate: "2026-05-22", client: "Mortgage Australia Aggregator Group", details: "Harrison ACT Office ref", items: [{ description: "Brokerage commission claim split standard", qty: 1, price: 6200 }], status: "Paid", taxRate: 10, notes: "Processed automatically via NextGen aggregation node" },
+      { id: "INV-2026-002", date: "2026-05-29", dueDate: "2026-06-12", client: "Macquarie Lending Operations", details: "Sydney HQ Refinance Node", items: [{ description: "Upfront brokerage settlement fee share", qty: 1, price: 2850 }], status: "Paid", taxRate: 10, notes: "Receipt verified by Macquarie" },
+      { id: "INV-2026-003", date: "2026-06-02", dueDate: "2026-06-16", client: "Westpac Bank ACT Desk", details: "CBA Canberra branch ref 88", items: [{ description: "Advisory support split for professional mentoring", qty: 1, price: 1200 }], status: "Sent", taxRate: 10, notes: "Mentorship verification attached" }
+    ];
+  });
+
+  useEffect(() => {
+    localStorage.setItem("mag_invoice_items", JSON.stringify(invoiceItems));
+  }, [invoiceItems]);
+
+  // Add Invoice Form States
+  const [showAddInvoiceForm, setShowAddInvoiceForm] = useState(false);
+  const [invNum, setInvNum] = useState(() => `INV-2026-0${Math.floor(10 + Math.random() * 90)}`);
+  const [invDate, setInvDate] = useState(() => new Date().toISOString().split("T")[0]);
+  const [invDueDate, setInvDueDate] = useState(() => {
+    const d = new Date();
+    d.setDate(d.getDate() + 14);
+    return d.toISOString().split("T")[0];
+  });
+  const [invClient, setInvClient] = useState("");
+  const [invDetails, setInvDetails] = useState("");
+  const [invItemDesc, setInvItemDesc] = useState("Mortgage broker advisory commissions");
+  const [invItemPrice, setInvItemPrice] = useState("");
+  const [invItemQty, setInvItemQty] = useState("1");
+  const [invTaxRate, setInvTaxRate] = useState("10");
+  const [invNotes, setInvNotes] = useState("");
+  const [invStatus, setInvStatus] = useState("Sent");
+  const [selectedInvoicePreview, setSelectedInvoicePreview] = useState<any | null>(null);
+  const [simulatedUserSession, setSimulatedUserSession] = useState<any | null>(null);
 
   // Load Submissions
   const loadSubmissionsData = async () => {
@@ -379,7 +501,7 @@ Your verification authentication code is: ${code}`);
                 {resetStep === 1 && (
                   <form onSubmit={handleSendResetCode} className="space-y-4">
                     <p className="text-[11px] text-zinc-400 leading-relaxed">
-                      To safeguard active financial data structures, we require verification. Provide the registered admin account index to trigger a security token.
+                      To safeguard active financial data structures, verification is required. Provide the registered admin account index to trigger a security token.
                     </p>
                     <div className="space-y-1">
                       <label className="block text-[11px] font-mono uppercase tracking-wider text-zinc-500">Account Index</label>
@@ -524,8 +646,99 @@ Your verification authentication code is: ${code}`);
             </div>
           </div>
 
-          {/* Metric Cards Matrix */}
-          <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
+          {/* Active Simulation Sandbox Notifications Banner */}
+          {simulatedUserSession && (
+            <div className="bg-amber-500/10 border border-amber-500/30 p-3.5 rounded-2xl flex flex-wrap items-center justify-between gap-3 text-xs text-amber-200">
+              <div className="flex items-center gap-2">
+                <div className="w-2.5 h-2.5 rounded-full bg-amber-400 animate-ping shrink-0" />
+                <span>
+                  Active Restricted View Sandbox: Impersonating <b>{simulatedUserSession.name}</b> ({simulatedUserSession.role}). 
+                  You only see options permitted in User Management!
+                </span>
+              </div>
+              <button 
+                onClick={() => setSimulatedUserSession(null)}
+                className="px-3 py-1 bg-amber-500 hover:bg-[#ff6900] text-black hover:text-white font-extrabold text-[10px] uppercase rounded-lg transition shrink-0 select-none cursor-pointer"
+              >
+                Cancel Impersonation
+              </button>
+            </div>
+          )}
+
+          {/* Side-by-Side Sidebar and Viewport columns */}
+          <div className="flex flex-col lg:flex-row gap-6 items-start">
+            
+            {/* Sidebar Menu Panel */}
+            <div className="w-full lg:w-64 shrink-0 bg-[#02132a] border border-[#004A99]/20 p-5 rounded-3xl space-y-2">
+              <div className="pb-3 border-b border-[#004A99]/15">
+                <span className="block text-[9px] font-mono uppercase tracking-widest text-[#ff6900] font-bold">Admin Directory</span>
+                <h3 className="text-sm font-bold text-white mt-1">Practice Control Hub</h3>
+              </div>
+              
+              <div className="space-y-1 pt-2">
+                {[
+                  { id: "overview", label: "Overview Panel", icon: LayoutDashboard },
+                  { id: "users", label: "User Management", icon: Users },
+                  { id: "income", label: "Income Tracker", icon: CreditCard },
+                  { id: "expense", label: "Expense Ledger", icon: Receipt },
+                  { id: "invoices", label: "Invoicing System", icon: FileText }
+                ].map((item) => {
+                  const allowedTabsList = simulatedUserSession
+                    ? simulatedUserSession.allowedMenus
+                    : ["overview", "users", "income", "expense", "invoices"];
+
+                  if (!allowedTabsList.includes(item.id)) return null;
+                  const IconComp = item.icon;
+                  const isActive = activeTab === item.id;
+                  return (
+                    <button
+                      key={item.id}
+                      onClick={() => setActiveTab(item.id)}
+                      className={`w-full flex items-center justify-between px-4 py-2.5 rounded-xl text-left text-xs font-semibold tracking-wide transition-all duration-300 cursor-pointer ${
+                        isActive
+                          ? "bg-[#ff6900] text-white shadow-lg shadow-[#ff6900]/20"
+                          : "text-zinc-400 hover:text-white hover:bg-[#004A99]/15"
+                      }`}
+                    >
+                      <span className="flex items-center gap-3">
+                        <IconComp className={`w-4 h-4 ${isActive ? "text-white" : "text-zinc-500"}`} />
+                        {item.label}
+                      </span>
+                      {item.id === "users" && adminUsers.length > 0 && (
+                        <span className={`px-1.5 py-0.5 text-[10px] font-mono font-bold rounded ${isActive ? "bg-white/20 text-white" : "bg-[#004A99]/40 text-blue-200"}`}>
+                          {adminUsers.length}
+                        </span>
+                      )}
+                      {item.id === "income" && incomeItems.length > 0 && (
+                        <span className={`px-1.5 py-0.5 text-[10px] font-mono font-bold rounded ${isActive ? "bg-white/20 text-white" : "bg-emerald-500/20 text-emerald-300"}`}>
+                          {incomeItems.length}
+                        </span>
+                      )}
+                      {item.id === "invoices" && invoiceItems.length > 0 && (
+                        <span className={`px-1.5 py-0.5 text-[10px] font-mono font-bold rounded ${isActive ? "bg-white/20 text-white" : "bg-[#ff6900]/25 text-amber-200"}`}>
+                          {invoiceItems.length}
+                        </span>
+                      )}
+                    </button>
+                  );
+                })}
+              </div>
+
+              <div className="pt-4 border-t border-[#004A99]/15 text-center">
+                <span className="text-[10px] text-zinc-500 font-mono">
+                  Settle Time: 12:03 UTC
+                </span>
+              </div>
+            </div>
+
+            {/* Main Tab Viewport */}
+            <div className="flex-1 w-full space-y-6">
+              
+              {/* Conditional Viewport Panels */}
+              {activeTab === "overview" && (
+                <div className="space-y-6">
+                  {/* Metric Cards Matrix */}
+                  <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
             
             {/* Total leads card */}
             <div className="bg-[#02132a] border border-[#004A99]/20 p-5 rounded-2xl relative overflow-hidden group">
@@ -860,6 +1073,43 @@ Your verification authentication code is: ${code}`);
                 </table>
               </div>
             )}
+          </div>
+
+                </div>
+              )}
+
+              {activeTab === "users" && (
+                <UserManagement
+                  adminUsers={adminUsers}
+                  setAdminUsers={setAdminUsers}
+                  activeTab={activeTab}
+                  setActiveTab={setActiveTab}
+                  setSimulatedUserSession={setSimulatedUserSession}
+                />
+              )}
+
+              {activeTab === "income" && (
+                <IncomeTracker
+                  incomeItems={incomeItems}
+                  setIncomeItems={setIncomeItems}
+                />
+              )}
+
+              {activeTab === "expense" && (
+                <ExpenseTracker
+                  expenseItems={expenseItems}
+                  setExpenseItems={setExpenseItems}
+                />
+              )}
+
+              {activeTab === "invoices" && (
+                <InvoicingSystem
+                  invoiceItems={invoiceItems}
+                  setInvoiceItems={setInvoiceItems}
+                />
+              )}
+
+            </div>
           </div>
 
         </div>

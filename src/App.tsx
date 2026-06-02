@@ -34,6 +34,24 @@ export default function App() {
   const [isLoading, setIsLoading] = useState(true);
   const [activeSection, setActiveSection] = useState("hero");
   const [activeServiceTab, setActiveServiceTab] = useState<"loans" | "support">("loans");
+  const [isDarkMode, setIsDarkMode] = useState(() => {
+    const saved = localStorage.getItem("theme");
+    return saved === "light" ? false : true; // Default is Dark Navy theme
+  });
+
+  // Synchronize theme with localstorage
+  useEffect(() => {
+    localStorage.setItem("theme", isDarkMode ? "dark" : "light");
+    if (isDarkMode) {
+      document.documentElement.classList.add("dark");
+    } else {
+      document.documentElement.classList.remove("dark");
+    }
+  }, [isDarkMode]);
+
+  const toggleTheme = () => {
+    setIsDarkMode((prev) => !prev);
+  };
 
   // Synchronize path state changes
   useEffect(() => {
@@ -50,11 +68,6 @@ export default function App() {
     window.scrollTo({ top: 0, behavior: "smooth" });
   };
 
-  // Render Admin Layout Standalone
-  if (isAdminPage) {
-    return <AdminPanel onBackToHome={() => navigateTo("/")} />;
-  }
-
   // Handle Initial Entrance Loader
   useEffect(() => {
     const timer = setTimeout(() => {
@@ -66,7 +79,7 @@ export default function App() {
   // Section Tracking on Scroll (Matches the original structural JS behavior)
   useEffect(() => {
     const handleScroll = () => {
-      const sections = ["services", "experience", "qualifications", "contact"];
+      const sections = ["about", "services", "experience", "qualifications", "contact"];
       const scrollPosition = window.scrollY + window.innerHeight * 0.4;
 
       // Check hero first
@@ -114,11 +127,17 @@ export default function App() {
     }
   };
 
+  if (isAdminPage) {
+    return <AdminPanel onBackToHome={() => navigateTo("/")} />;
+  }
+
   return (
-    <div className="relative min-h-screen text-zinc-100 font-sans selection:bg-blue-600/30 selection:text-blue-100">
+    <div className={`relative min-h-screen font-sans transition-colors duration-300 selection:bg-[#ff6900]/30 selection:text-white ${
+      isDarkMode ? "text-zinc-100 bg-[#010816]" : "text-zinc-800 bg-[#f1f5f9]"
+    }`}>
       
       {/* Dynamic Ambient Blur Background */}
-      <GlowBackground />
+      <GlowBackground isDarkMode={isDarkMode} />
 
       {/* Loader Sequence */}
       <AnimatePresence>
@@ -147,7 +166,14 @@ export default function App() {
       </AnimatePresence>
 
       {/* Floating Header */}
-      {!isLoading && <Header activeSection={activeSection} />}
+      {!isLoading && (
+        <Header 
+          activeSection={activeSection} 
+          onNavigate={navigateTo} 
+          isDarkMode={isDarkMode} 
+          onToggleTheme={toggleTheme} 
+        />
+      )}
 
       {/* HERO SECTION */}
       <section 
@@ -173,7 +199,9 @@ export default function App() {
                 initial={{ opacity: 0, y: 15 }}
                 animate={{ opacity: 1, y: 0 }}
                 transition={{ delay: 0.2, duration: 0.5 }}
-                className="text-4xl sm:text-5xl lg:text-6xl font-extrabold tracking-tight font-display text-white leading-none"
+                className={`text-4xl sm:text-5xl lg:text-6xl font-extrabold tracking-tight font-display leading-none transition-colors duration-300 ${
+                  isDarkMode ? "text-white" : "text-zinc-900"
+                }`}
               >
                 Shariff Rahman
               </motion.h1>
@@ -182,7 +210,9 @@ export default function App() {
                 initial={{ opacity: 0, y: 15 }}
                 animate={{ opacity: 1, y: 0 }}
                 transition={{ delay: 0.3, duration: 0.5 }}
-                className="text-blue-400 text-lg sm:text-xl font-semibold tracking-tight font-display"
+                className={`text-lg sm:text-xl font-semibold tracking-tight font-display transition-colors duration-300 ${
+                  isDarkMode ? "text-blue-400" : "text-blue-700"
+                }`}
               >
                 Principal Mortgage Broker & Mentor
               </motion.p>
@@ -275,7 +305,7 @@ export default function App() {
               <div className="absolute -inset-1 bg-gradient-to-r from-blue-500/10 to-blue-400/10 opacity-30 blur-xl group-hover:opacity-50 duration-300" />
 
               <img
-                src="https://ezydigitalhub.com/wp-content/uploads/2026/04/Asset-203.webp"
+                src="https://mortgagebrokerassist.com.au/wp-content/uploads/2026/02/Who-we-are-01.webp"
                 alt="Shariff Rahman Mortgage Broker"
                 className="w-full h-full object-cover relative z-10 transition duration-500 group-hover:scale-105"
                 referrerPolicy="no-referrer"
@@ -294,6 +324,64 @@ export default function App() {
             </motion.div>
           </div>
 
+        </div>
+      </section>
+
+      {/* ABOUT US SECTION */}
+      <section 
+        id="about" 
+        className="px-4 sm:px-6 py-20 max-w-6xl mx-auto border-t border-zinc-900/80 scroll-mt-24"
+      >
+        <div className="grid md:grid-cols-12 gap-10 items-center">
+          {/* Left Media Column */}
+          <div className="md:col-span-5 flex justify-center relative">
+            <div className="relative w-[280px] sm:w-[340px] aspect-[4/5] rounded-3xl overflow-hidden border border-white/10 group shadow-2xl hover:border-blue-500/40 duration-300">
+              <div className="absolute inset-0 bg-gradient-to-t from-black via-transparent to-transparent z-10" />
+              <img
+                src="https://mortgagebrokerassist.com.au/wp-content/uploads/2026/06/image-2-scaled.png"
+                alt="About us - Mortgage Broker Assist and Shariff Rahman"
+                className="w-full h-full object-cover transition duration-500 group-hover:scale-105"
+                referrerPolicy="no-referrer"
+              />
+            </div>
+          </div>
+          
+          {/* Right Content Column */}
+          <div className="md:col-span-7 space-y-6 text-center md:text-left">
+            <div>
+              <span className="text-xs font-mono tracking-widest text-[#ff6100] uppercase font-bold">WHO I AM</span>
+              <h2 className={`text-3xl md:text-4xl font-extrabold tracking-tight font-display mt-1 transition-colors duration-300 ${
+                isDarkMode ? "text-white" : "text-zinc-900"
+              }`}>
+                About Me & My Broking Mission
+              </h2>
+            </div>
+            
+            <p className={`text-sm sm:text-base leading-relaxed transition-colors duration-300 ${
+              isDarkMode ? "text-zinc-400" : "text-zinc-600"
+            }`}>
+              With deep-rooted financial command and an unwavering standard for compliance, I partner with clients to navigate complex lending landscapes smoothly. As an authorized credit representative with direct integration with the Mortgage Australia Group, my access to over 31 accredited lenders allows me to secure superior loan configurations and discount rates for Canberra region and nationwide customers.
+            </p>
+
+            <p className={`text-xs sm:text-sm leading-relaxed transition-colors duration-300 ${
+              isDarkMode ? "text-zinc-400" : "text-zinc-500"
+            }`}>
+              My dedication goes beyond broker transactions—I actively mentor emerging mortgage professionals nationwide, helping them adhere to rigorous MFAA & FBAA standards while optimizing back-office efficiency.
+            </p>
+
+            <div className={`grid grid-cols-2 gap-4 border-t pt-6 text-xs transition-colors duration-300 ${
+              isDarkMode ? "border-zinc-800 text-zinc-400" : "border-zinc-200 text-zinc-650"
+            }`}>
+              <div>
+                <b className={`block mb-1 transition-colors duration-300 ${isDarkMode ? "text-white" : "text-zinc-800"}`}>Diligence & Integrity</b>
+                Ensuring credit assessments and financial structures are completely optimized for your long-term benefit.
+              </div>
+              <div>
+                <b className="text-[#ff6900] block mb-1">Approved Mentorship</b>
+                Fostering industry growth by guiding next-generation advisors through accredited development programs.
+              </div>
+            </div>
+          </div>
         </div>
       </section>
 
