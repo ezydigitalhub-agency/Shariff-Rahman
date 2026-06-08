@@ -73,14 +73,10 @@ export default function Header({ activeSection, onNavigate, isDarkMode = true, o
               />
             </div>
             <div className="flex flex-col">
-              <span className={`text-sm font-semibold tracking-tight transition-colors ${
-                isDarkMode ? "text-white group-hover:text-blue-400" : "text-zinc-900 group-hover:text-blue-600"
-              }`}>
+              <span className="text-sm font-semibold tracking-tight transition-colors" style={{ color: "#ffffff" }}>
                 Shariff Rahman
               </span>
-              <span className={`text-[9px] leading-none transition-colors ${
-                isDarkMode ? "text-[#ff6900]" : "text-[#ff6900]/80 font-semibold"
-              }`}>
+              <span className="text-[9px] leading-none transition-colors font-semibold" style={{ color: "#ffffff" }}>
                 Mortgage Broker Assist
               </span>
             </div>

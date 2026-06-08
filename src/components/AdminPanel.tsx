@@ -8,6 +8,8 @@ import {
   Plus, Search, Trash2, Pencil, X, CheckCircle2, Clock, AlertTriangle,
   Send, Building2, Mail, LogOut, Eye, Lock, Sun, Moon,
 } from "lucide-react";
+import XeroSales from "./XeroSales";
+import XeroInvoices from "./XeroInvoices";
 
 /* ----------------------------------------------------------------------- *
  *  EZY GROUP — Business Admin Panel (interactive prototype)
@@ -33,7 +35,7 @@ const BANK_ACCOUNTS = [
 const INCOME_CATEGORIES = ["Loan Settlement", "Brokerage Commission", "Outsourcing Fee", "Consulting", "Other"];
 const SERVICES = ["Home Loan", "Refinance", "Commercial Loan", "Back-office", "Lead Generation", "Accounting Support"];
 const EXPENSE_CATEGORIES = ["Office Operations", "Administration", "Subscription Purchase", "Salary Expense"];
-const SECTIONS = ["overview", "clients", "income", "expense", "invoices", "users"];
+const SECTIONS = ["overview", "clients", "income", "expense", "invoices", "users", "xero_sales", "xero_invoices"];
 
 /* ---------- seed data ---------- */
 const seed = () => ({
@@ -66,9 +68,9 @@ const seed = () => ({
   users: [
     { id: "u1", name: "Managing Director", email: "md@ezygroup.com.au", role: "CEO", perms: fullPerms() },
     { id: "u2", name: "Operations Manager", email: "ops@ezygroup.com.au", role: "Manager",
-      perms: { overview: "view", clients: "edit", income: "edit", expense: "view", invoices: "edit", users: "none" } },
+      perms: { overview: "view", clients: "edit", income: "edit", expense: "view", invoices: "edit", users: "none", xero_sales: "edit", xero_invoices: "edit" } },
     { id: "u3", name: "Accounts Staff", email: "accounts@ezygroup.com.au", role: "Staff",
-      perms: { overview: "view", clients: "view", income: "edit", expense: "edit", invoices: "view", users: "none" } },
+      perms: { overview: "view", clients: "view", income: "edit", expense: "edit", invoices: "view", users: "none", xero_sales: "view", xero_invoices: "view" } },
   ],
 });
 
@@ -223,6 +225,8 @@ export default function AdminPanel({ onBackToHome, isDarkMode = false, onToggleT
           {activeSection === "expense" && <Expense db={db} commit={commit} scope={scope} canEdit={canEdit("expense")} />}
           {activeSection === "invoices" && <Invoices db={db} commit={commit} scope={scope} canEdit={canEdit("invoices")} />}
           {activeSection === "users" && <UsersMgmt db={db} commit={commit} canEdit={canEdit("users")} />}
+          {activeSection === "xero_sales" && <XeroSales isDarkMode={isDarkMode} />}
+          {activeSection === "xero_invoices" && <XeroInvoices isDarkMode={isDarkMode} />}
         </div>
       </main>
     </div>
@@ -236,6 +240,8 @@ const NAV = [
   { key: "expense", label: "Expense", icon: Wallet },
   { key: "invoices", label: "Invoice System", icon: FileText },
   { key: "users", label: "User Management", icon: ShieldCheck },
+  { key: "xero_sales", label: "Xero Sales Overview (EDH)", icon: TrendingUp },
+  { key: "xero_invoices", label: "Xero Invoices Overview (EDH)", icon: FileText },
 ];
 
 /* ============================ OVERVIEW ============================ */

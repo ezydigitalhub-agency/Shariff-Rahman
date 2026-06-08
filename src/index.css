@@ -1,11 +1,11 @@
-@import url('https://fonts.googleapis.com/css2?family=Bai+Jamjuree:wght@300;400;500;600;700&display=swap');
+@import url('https://fonts.googleapis.com/css2?family=Roboto:wght@300;400;500;700;900&display=swap');
 @import "tailwindcss";
 
 @theme {
-  --font-sans: "Inter", ui-sans-serif, system-ui, sans-serif;
-  --font-display: "Space Grotesk", system-ui, sans-serif;
+  --font-sans: "Roboto", ui-sans-serif, system-ui, sans-serif;
+  --font-display: "Roboto", system-ui, sans-serif;
   --font-mono: "JetBrains Mono", ui-monospace, SFMono-Regular, monospace;
-  --font-bai: "Bai Jamjuree", sans-serif;
+  --font-bai: "Roboto", sans-serif;
   
   --color-blue-300: #ff8e3c;
   --color-blue-400: #ff6900;
@@ -54,7 +54,7 @@ body {
 }
 
 html:not(.dark) body {
-  background-color: #f1f5f9;
+  background-color: #ffffff !important;
 }
 
 /* Light Mode overrides for Home page */
@@ -62,39 +62,79 @@ html:not(.dark) {
   color-scheme: light;
 }
 
-/* Treat text-white class as dark charcoal in light mode */
-html:not(.dark) .text-white {
-  color: #0f172a !important; /* text-slate-900 */
+/* Ensure all title headers and heading elements are black and bold in light mode */
+html:not(.dark) h1,
+html:not(.dark) h2,
+html:not(.dark) h3,
+html:not(.dark) h4,
+html:not(.dark) h5,
+html:not(.dark) h6,
+html:not(.dark) [class*="title"],
+html:not(.dark) [class*="heading"],
+html:not(.dark) [class*="Heading"] {
+  color: #000000 !important;
+  font-weight: 750 !important;
 }
 
-/* Treat text-zinc-100 class as dark slate in light mode */
-html:not(.dark) .text-zinc-100 {
-  color: #1e293b !important; /* text-slate-800 */
+/* Treat text-white class as black in light mode, EXCEPT for styled buttons, backgrounds or icons! */
+html:not(.dark) .text-white:not(button):not(button *):not([class*="bg-"]):not([class*="bg-"] *):not(.btn):not(.btn *):not(.banner *):not(header *):not(.bg-[#ff6900] *):not(.bg-[#13b5ea] *):not(.bg-blue-600 *) {
+  color: #000000 !important;
 }
 
-/* Treat text-zinc-300 as slate-700 in light mode */
-html:not(.dark) .text-zinc-300 {
-  color: #334155 !important;
+/* Ensure ALL light theme buttons with background fills or text-white styles have pristine, clear white text */
+html:not(.dark) button:not(.bg-transparent):not(.bg-none):not(.bg-white):not(.border-none):not(.btn-ghost):not(.text-zinc-500):not(.text-zinc-650):not(.text-zinc-600):not(.p-1.5):not(.p-2),
+html:not(.dark) button.text-white,
+html:not(.dark) button.text-white *,
+html:not(.dark) button.bg-blue-600,
+html:not(.dark) button.bg-blue-600 *,
+html:not(.dark) button.bg-[#13b5ea],
+html:not(.dark) button.bg-[#13b5ea] *,
+html:not(.dark) button.bg-[#ff6900],
+html:not(.dark) button.bg-[#ff6900] *,
+html:not(.dark) .btn.primary,
+html:not(.dark) .btn.primary *,
+html:not(.dark) a.bg-blue-600,
+html:not(.dark) a.bg-blue-600 *,
+html:not(.dark) a.bg-[#ff6900],
+html:not(.dark) a.bg-[#ff6900] *,
+html:not(.dark) .bg-brand-orange,
+html:not(.dark) .bg-brand-orange *,
+html:not(.dark) .bg-blue-500 * {
+  color: #ffffff !important;
 }
 
-/* Treat text-zinc-400 as slate-600 in light mode */
-html:not(.dark) .text-zinc-400 {
-  color: #475569 !important;
+/* Replace color of gray elements and all generic body/slate/zinc text with solid black, keeping buttons untouched */
+html:not(.dark) .text-zinc-100:not(button):not(button *):not(.btn):not(.btn *),
+html:not(.dark) .text-zinc-200:not(button):not(button *):not(.btn):not(.btn *),
+html:not(.dark) .text-zinc-300:not(button):not(button *):not(.btn):not(.btn *),
+html:not(.dark) .text-zinc-400:not(button):not(button *):not(.btn):not(.btn *),
+html:not(.dark) .text-zinc-500:not(button):not(button *):not(.btn):not(.btn *),
+html:not(.dark) .text-zinc-600:not(button):not(button *):not(.btn):not(.btn *),
+html:not(.dark) .text-zinc-700:not(button):not(button *):not(.btn):not(.btn *),
+html:not(.dark) .text-zinc-800:not(button):not(button *):not(.btn):not(.btn *),
+html:not(.dark) .text-zinc-900:not(button):not(button *):not(.btn):not(.btn *),
+html:not(.dark) .text-zinc-650:not(button):not(button *):not(.btn):not(.btn *),
+html:not(.dark) .text-slate-400:not(button):not(button *):not(.btn):not(.btn *),
+html:not(.dark) .text-slate-500:not(button):not(button *):not(.btn):not(.btn *),
+html:not(.dark) .text-slate-650:not(button):not(button *):not(.btn):not(.btn *),
+html:not(.dark) .text-gray-400:not(button):not(button *):not(.btn):not(.btn *),
+html:not(.dark) .text-gray-500:not(button):not(button *):not(.btn):not(.btn *),
+html:not(.dark) p:not(button):not(button *):not(.btn):not(.btn *),
+html:not(.dark) span:not(button):not(button *):not(.btn):not(.btn *),
+html:not(.dark) li:not(button):not(button *):not(.btn):not(.btn *),
+html:not(.dark) label:not(button):not(button *):not(.btn):not(.btn *),
+html:not(.dark) td:not(button):not(button *):not(.btn):not(.btn *) {
+  color: #000000 !important;
 }
 
-/* Treat text-zinc-500 as slate-500 in light mode */
-html:not(.dark) .text-zinc-500 {
-  color: #64748b !important;
-}
-
-/* Border overrides */
+/* Replace neutral ash/gray borders with high-end brand blue tinted borders */
 html:not(.dark) .border-zinc-900,
 html:not(.dark) .border-zinc-800,
 html:not(.dark) .border-zinc-850,
 html:not(.dark) .border-white\/10,
 html:not(.dark) .border-white\/15,
 html:not(.dark) .border-white\/20 {
-  border-color: #e2e8f0 !important; /* border-slate-200 */
+  border-color: rgba(0, 74, 153, 0.16) !important; /* Tinted with brand blue */
 }
 
 /* Background overlay adjustments for glass blocks in light mode */
@@ -110,21 +150,22 @@ html:not(.dark) .bg-zinc-900\/60,
 html:not(.dark) .bg-zinc-920,
 html:not(.dark) .bg-zinc-900,
 html:not(.dark) .bg-zinc-950 {
-  background-color: rgba(255, 255, 255, 0.75) !important;
-  backdrop-filter: blur(12px);
+  background-color: #ffffff !important;
+  backdrop-filter: none !important;
+  border: 1px solid rgba(0, 74, 153, 0.12);
 }
 
 /* Keep selected active highlights or status boxes clean in light mode */
 html:not(.dark) .bg-blue-600\/10 {
-  background-color: rgba(37, 99, 235, 0.08) !important;
+  background-color: rgba(0, 74, 153, 0.08) !important;
 }
 
 html:not(.dark) .bg-zinc-950\/60 h5 {
-  color: #2563eb !important;
+  color: #004a99 !important;
 }
 
 html:not(.dark) .text-zinc-650 {
-  color: #27272a;
+  color: #02244d;
 }
 
 /* Inputs / controls in light mode */
@@ -132,26 +173,27 @@ html:not(.dark) input,
 html:not(.dark) select,
 html:not(.dark) textarea {
   background-color: #ffffff !important;
-  color: #0f172a !important;
-  border-color: #cbd5e1 !important; /* border-slate-300 */
+  color: #02244d !important;
+  border-color: rgba(0, 74, 153, 0.2) !important;
 }
 
 html:not(.dark) input::placeholder,
 html:not(.dark) textarea::placeholder {
-  color: #94a3b8 !important; /* placeholder-slate-400 */
+  color: #004a99/60 !important;
 }
 
 html:not(.dark) input[type="range"] {
-  background-color: #cbd5e1 !important;
+  background-color: rgba(0, 74, 153, 0.15) !important;
 }
 
-/* Custom scrollbars in light mode */
+/* Custom scrollbars in light mode - themed perfectly to brand navy blue and orange */
 html:not(.dark) ::-webkit-scrollbar-track {
-  background: #f1f5f9;
+  background: #f4f7fc;
 }
 html:not(.dark) ::-webkit-scrollbar-thumb {
-  background: #cbd5e1;
+  background: rgba(0, 74, 153, 0.25); /* Subtle brand blue */
+  border-radius: 4px;
 }
 html:not(.dark) ::-webkit-scrollbar-thumb:hover {
-  background: #94a3b8;
+  background: #ff6900; /* Pop with brand orange hover! */
 }
