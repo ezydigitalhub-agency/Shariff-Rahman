@@ -36,7 +36,7 @@ export default function App() {
   const [activeServiceTab, setActiveServiceTab] = useState<"loans" | "support">("loans");
   const [isDarkMode, setIsDarkMode] = useState(() => {
     const saved = localStorage.getItem("theme");
-    return saved === "light" ? false : true; // Default is Dark Navy theme
+    return saved === "dark" ? true : false; // Default is Light theme
   });
 
   // Synchronize theme with localstorage
@@ -128,7 +128,13 @@ export default function App() {
   };
 
   if (isAdminPage) {
-    return <AdminPanel onBackToHome={() => navigateTo("/")} />;
+    return (
+      <AdminPanel 
+        onBackToHome={() => navigateTo("/")} 
+        isDarkMode={isDarkMode} 
+        onToggleTheme={toggleTheme} 
+      />
+    );
   }
 
   return (

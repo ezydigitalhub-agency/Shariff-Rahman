@@ -49,5 +49,109 @@
 
 body {
   overflow-x: hidden;
-  background-color: #000;
+  background-color: #010816;
+  transition: background-color 0.3s ease;
+}
+
+html:not(.dark) body {
+  background-color: #f1f5f9;
+}
+
+/* Light Mode overrides for Home page */
+html:not(.dark) {
+  color-scheme: light;
+}
+
+/* Treat text-white class as dark charcoal in light mode */
+html:not(.dark) .text-white {
+  color: #0f172a !important; /* text-slate-900 */
+}
+
+/* Treat text-zinc-100 class as dark slate in light mode */
+html:not(.dark) .text-zinc-100 {
+  color: #1e293b !important; /* text-slate-800 */
+}
+
+/* Treat text-zinc-300 as slate-700 in light mode */
+html:not(.dark) .text-zinc-300 {
+  color: #334155 !important;
+}
+
+/* Treat text-zinc-400 as slate-600 in light mode */
+html:not(.dark) .text-zinc-400 {
+  color: #475569 !important;
+}
+
+/* Treat text-zinc-500 as slate-500 in light mode */
+html:not(.dark) .text-zinc-500 {
+  color: #64748b !important;
+}
+
+/* Border overrides */
+html:not(.dark) .border-zinc-900,
+html:not(.dark) .border-zinc-800,
+html:not(.dark) .border-zinc-850,
+html:not(.dark) .border-white\/10,
+html:not(.dark) .border-white\/15,
+html:not(.dark) .border-white\/20 {
+  border-color: #e2e8f0 !important; /* border-slate-200 */
+}
+
+/* Background overlay adjustments for glass blocks in light mode */
+html:not(.dark) .bg-zinc-950\/20,
+html:not(.dark) .bg-zinc-950\/40,
+html:not(.dark) .bg-zinc-950\/60,
+html:not(.dark) .bg-zinc-950\/80,
+html:not(.dark) .bg-zinc-900\/10,
+html:not(.dark) .bg-zinc-900\/20,
+html:not(.dark) .bg-zinc-900\/30,
+html:not(.dark) .bg-zinc-900\/50,
+html:not(.dark) .bg-zinc-900\/60,
+html:not(.dark) .bg-zinc-920,
+html:not(.dark) .bg-zinc-900,
+html:not(.dark) .bg-zinc-950 {
+  background-color: rgba(255, 255, 255, 0.75) !important;
+  backdrop-filter: blur(12px);
+}
+
+/* Keep selected active highlights or status boxes clean in light mode */
+html:not(.dark) .bg-blue-600\/10 {
+  background-color: rgba(37, 99, 235, 0.08) !important;
+}
+
+html:not(.dark) .bg-zinc-950\/60 h5 {
+  color: #2563eb !important;
+}
+
+html:not(.dark) .text-zinc-650 {
+  color: #27272a;
+}
+
+/* Inputs / controls in light mode */
+html:not(.dark) input,
+html:not(.dark) select,
+html:not(.dark) textarea {
+  background-color: #ffffff !important;
+  color: #0f172a !important;
+  border-color: #cbd5e1 !important; /* border-slate-300 */
+}
+
+html:not(.dark) input::placeholder,
+html:not(.dark) textarea::placeholder {
+  color: #94a3b8 !important; /* placeholder-slate-400 */
+}
+
+html:not(.dark) input[type="range"] {
+  background-color: #cbd5e1 !important;
+}
+
+/* Custom scrollbars in light mode */
+html:not(.dark) ::-webkit-scrollbar-track {
+  background: #f1f5f9;
+}
+html:not(.dark) ::-webkit-scrollbar-thumb {
+  background: #cbd5e1;
+}
+html:not(.dark) ::-webkit-scrollbar-thumb:hover {
+  background: #94a3b8;
 }

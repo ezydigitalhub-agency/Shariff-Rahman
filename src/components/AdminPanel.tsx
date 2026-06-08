@@ -1,1207 +1,1031 @@
-import React, { useState, useEffect } from "react";
-import { 
-  FileSpreadsheet, 
-  Users, 
-  TrendingUp, 
-  Calendar, 
-  Search, 
-  LogOut, 
-  ExternalLink, 
-  Settings, 
-  RefreshCw, 
-  Trash2, 
-  CheckCircle2, 
-  Clock, 
-  AlertTriangle,
-  Mail,
-  Lock,
-  ArrowRight,
-  ShieldCheck,
-  X,
-  FileText,
-  DollarSign,
-  Briefcase,
-  HelpCircle,
-  Bell,
-  ChevronRight,
-  Plus,
-  Percent,
-  Check,
-  Printer,
-  Eye,
-  EyeOff,
-  LayoutDashboard,
-  CreditCard,
-  Receipt
+import React, { useState, useEffect, useMemo } from "react";
+import {
+  PieChart, Pie, Cell, ResponsiveContainer, Tooltip, Legend,
+  BarChart, Bar, XAxis, YAxis, CartesianGrid,
+} from "recharts";
+import {
+  LayoutDashboard, Users, TrendingUp, Wallet, FileText, ShieldCheck,
+  Plus, Search, Trash2, Pencil, X, CheckCircle2, Clock, AlertTriangle,
+  Send, Building2, Mail, LogOut, Eye, Lock, Sun, Moon,
 } from "lucide-react";
-import { 
-  db,
-  fetchSubmissions, 
-  syncUnsyncedToSheets, 
-  getAccessToken,
-  SPREADSHEET_ID,
-  Submission
-} from "../lib/firebase";
-import { doc, deleteDoc, updateDoc } from "firebase/firestore";
-import UserManagement from "./UserManagement";
-import IncomeTracker from "./IncomeTracker";
-import ExpenseTracker from "./ExpenseTracker";
-import InvoicingSystem from "./InvoicingSystem";
+
+/* ----------------------------------------------------------------------- *
+ *  EZY GROUP — Business Admin Panel (interactive prototype)
+ *  Two entities: EZY MORTGAGE AUSTRALIA PTY LTD & EZY OUTSOURCE PTY LTD
+ * ----------------------------------------------------------------------- */
 
 interface AdminPanelProps {
   onBackToHome: () => void;
+  isDarkMode?: boolean;
+  onToggleTheme?: () => void;
 }
 
-export default function AdminPanel({ onBackToHome }: AdminPanelProps) {
-  // Authentication states
-  const [email, setEmail] = useState("");
-  const [password, setPassword] = useState("");
-  const [isLoggedIn, setIsLoggedIn] = useState(false);
-  const [loginError, setLoginError] = useState<string | null>(null);
+const COMPANIES = {
+  mortgage: "EZY MORTGAGE AUSTRALIA PTY LTD",
+  outsource: "EZY OUTSOURCE PTY LTD",
+};
 
-  // Forgot password flow states
-  const [showForgotFlow, setShowForgotFlow] = useState(false);
-  const [resetEmail, setResetEmail] = useState("");
-  const [resetStep, setResetStep] = useState<1 | 2 | 3>(1); // 1: Send request, 2: Insert code, 3: Set new pass
-  const [resetCode, setResetCode] = useState("");
-  const [generatedCode, setGeneratedCode] = useState("");
-  const [newPassword, setNewPassword] = useState("");
-  const [resetNotification, setResetNotification] = useState<string | null>(null);
-  const [simulatedMailInbox, setSimulatedMailInbox] = useState<string | null>(null);
+const BANK_ACCOUNTS = [
+  { label: "Account 1 — NAB", bsb: "083-004", acc: "12 345 6789", name: "EZY Mortgage Australia Pty Ltd" },
+  { label: "Account 2 — CBA", bsb: "062-001", acc: "98 765 4321", name: "EZY Outsource Pty Ltd" },
+];
 
-  // Client Dashboard States
-  const [submissions, setSubmissions] = useState<Submission[]>([]);
-  const [loading, setLoading] = useState(false);
-  const [syncing, setSyncing] = useState(false);
-  const [syncStatus, setSyncStatus] = useState<string | null>(null);
-  const [searchQuery, setSearchQuery] = useState("");
-  const [statusFilter, setStatusFilter] = useState<"all" | "pending" | "synced">("all");
-  const [selectedSubmission, setSelectedSubmission] = useState<Submission | null>(null);
+const INCOME_CATEGORIES = ["Loan Settlement", "Brokerage Commission", "Outsourcing Fee", "Consulting", "Other"];
+const SERVICES = ["Home Loan", "Refinance", "Commercial Loan", "Back-office", "Lead Generation", "Accounting Support"];
+const EXPENSE_CATEGORIES = ["Office Operations", "Administration", "Subscription Purchase", "Salary Expense"];
+const SECTIONS = ["overview", "clients", "income", "expense", "invoices", "users"];
 
-  // Stats
-  const [stats, setStats] = useState({
-    total: 0,
-    synced: 0,
-    pending: 0,
-    totalVolume: 0
-  });
+/* ---------- seed data ---------- */
+const seed = () => ({
+  clients: [
+    { id: "c1", name: "Daniel Whitmore", email: "daniel@brightside.com.au", phone: "0412 334 556", companyName: "Brightside Realty", address: "12 Pitt St, Sydney NSW 2000", abn: "53 004 085 616", company: "mortgage" },
+    { id: "c2", name: "Aisha Khan", email: "aisha@nexushold.com.au", phone: "0433 221 110", companyName: "Nexus Holdings", address: "88 Collins St, Melbourne VIC 3000", abn: "11 222 333 444", company: "outsource" },
+    { id: "c3", name: "Marco Ferreira", email: "marco@coastline.com.au", phone: "0401 998 776", companyName: "Coastline Group", address: "5 Eagle St, Brisbane QLD 4000", abn: "62 110 220 330", company: "mortgage" },
+  ],
+  income: [
+    { id: "i1", clientId: "c1", company: "mortgage", category: "Loan Settlement", service: "Home Loan", amount: 8500, date: "2026-05-12", status: "paid", note: "Settlement bonus" },
+    { id: "i2", clientId: "c3", company: "mortgage", category: "Brokerage Commission", service: "Refinance", amount: 4200, date: "2026-05-20", status: "unpaid", note: "Awaiting lender" },
+    { id: "i3", clientId: "c2", company: "outsource", category: "Outsourcing Fee", service: "Back-office", amount: 6300, date: "2026-05-28", status: "paid", note: "Monthly retainer" },
+    { id: "i4", clientId: "c2", company: "outsource", category: "Consulting", service: "Accounting Support", amount: 2100, date: "2026-06-02", status: "unpaid", note: "" },
+  ],
+  expenses: [
+    { id: "e1", company: "mortgage", category: "Office Operations", sub: "Rent", amount: 3200, date: "2026-05-01", note: "Sydney office" },
+    { id: "e2", company: "outsource", category: "Subscription Purchase", sub: "Xero + CRM", amount: 480, date: "2026-05-03", note: "" },
+    { id: "e3", company: "mortgage", category: "Salary Expense", sub: "Sarah Lin (Broker)", amount: 6500, date: "2026-05-30", note: "May salary" },
+    { id: "e4", company: "outsource", category: "Salary Expense", sub: "Team — Manila", amount: 4800, date: "2026-05-30", note: "May salary" },
+    { id: "e5", company: "mortgage", category: "Administration", sub: "Accounting fees", amount: 950, date: "2026-05-15", note: "" },
+  ],
+  invoices: [
+    { id: "inv1", number: "INV-1001", clientId: "c1", company: "mortgage", issueDate: "2026-05-01", dueDate: "2026-05-15", status: "paid",
+      items: [{ desc: "Home loan brokerage service", qty: 1, price: 8500 }] },
+    { id: "inv2", number: "INV-1002", clientId: "c2", company: "outsource", issueDate: "2026-05-01", dueDate: "2026-05-15", status: "sent",
+      items: [{ desc: "Monthly back-office retainer", qty: 1, price: 6300 }] },
+    { id: "inv3", number: "INV-1003", clientId: "c3", company: "mortgage", issueDate: "2026-04-01", dueDate: "2026-04-15", status: "overdue",
+      items: [{ desc: "Refinance commission", qty: 1, price: 4200 }] },
+  ],
+  users: [
+    { id: "u1", name: "Managing Director", email: "md@ezygroup.com.au", role: "CEO", perms: fullPerms() },
+    { id: "u2", name: "Operations Manager", email: "ops@ezygroup.com.au", role: "Manager",
+      perms: { overview: "view", clients: "edit", income: "edit", expense: "view", invoices: "edit", users: "none" } },
+    { id: "u3", name: "Accounts Staff", email: "accounts@ezygroup.com.au", role: "Staff",
+      perms: { overview: "view", clients: "view", income: "edit", expense: "edit", invoices: "view", users: "none" } },
+  ],
+});
 
-  // Admin Credentials Storage (persisted state in localStorage to support live code checks)
-  const [activeAdminPassword, setActiveAdminPassword] = useState(() => {
-    return localStorage.getItem("mag_admin_password") || "@#Superadmin@#";
-  });
+function fullPerms() {
+  const p: any = {};
+  SECTIONS.forEach((s) => (p[s] = "edit"));
+  return p;
+}
 
-  useEffect(() => {
-    localStorage.setItem("mag_admin_password", activeAdminPassword);
-  }, [activeAdminPassword]);
+/* ---------- storage layer (persists across sessions, falls back to memory) ---------- */
+const KEY = "ezy_admin_db_v3";
+async function loadDB() {
+  try {
+    const localVal = localStorage.getItem(KEY);
+    if (localVal) return JSON.parse(localVal);
 
-  // Tab navigation state
-  const [activeTab, setActiveTab] = useState<"overview" | "users" | "income" | "expense" | "invoices">("overview");
-
-  // User Management State
-  const [adminUsers, setAdminUsers] = useState<any[]>(() => {
-    const saved = localStorage.getItem("mag_admin_users");
-    if (saved) return JSON.parse(saved);
-    return [
-      { id: "u-1", name: "Shariff Rahman", email: "shariff@mortgagebrokerassist.com.au", role: "Principal Broker", allowedMenus: ["overview", "income", "expense", "invoices"] },
-      { id: "u-2", name: "Assist Team Support", "email": "assist@mortgagebrokerassist.com.au", role: "Administrative Assistant", allowedMenus: ["overview", "invoices"] },
-      { id: "u-3", name: "External Auditor", "email": "audits@ezydigitalhub.com", role: "Financial Accountant", allowedMenus: ["income", "expense"] }
-    ];
-  });
-
-  useEffect(() => {
-    localStorage.setItem("mag_admin_users", JSON.stringify(adminUsers));
-  }, [adminUsers]);
-
-  // Add User Form States
-  const [showAddUserForm, setShowAddUserForm] = useState(false);
-  const [newUserName, setNewUserName] = useState("");
-  const [newUserEmail, setNewUserEmail] = useState("");
-  const [newUserRole, setNewUserRole] = useState("Administrative Assistant");
-  const [newUserAllowedMenus, setNewUserAllowedMenus] = useState<string[]>(["overview"]);
-
-  // Income State
-  const [incomeItems, setIncomeItems] = useState<any[]>(() => {
-    const saved = localStorage.getItem("mag_income_items");
-    if (saved) return JSON.parse(saved);
-    return [
-      { id: "inc-1", date: "2026-05-15", client: "James & Sarah Harrison Home Loan", amount: 6200, brokerageRate: 0.65, category: "Upfront Commission", status: "Paid", notes: "Settled with St. George. Capital count: $950,000" },
-      { id: "inc-2", date: "2026-05-28", client: "Liam O'Connor Refinance Deal", amount: 2850, brokerageRate: 0.55, category: "Upfront Commission", status: "Paid", notes: "Macquarie Bank refinance. Fast clearance." },
-      { id: "inc-3", date: "2026-06-01", client: "Emily Watson First Home Buyer ACT", amount: 4850, brokerageRate: 0.65, category: "Upfront Commission", status: "Pending", notes: "Approved by Commonwealth Bank. Settling mid June." }
-    ];
-  });
-
-  useEffect(() => {
-    localStorage.setItem("mag_income_items", JSON.stringify(incomeItems));
-  }, [incomeItems]);
-
-  // Add Income Form States
-  const [showAddIncomeForm, setShowAddIncomeForm] = useState(false);
-  const [incClient, setIncClient] = useState("");
-  const [incDate, setIncDate] = useState(() => new Date().toISOString().split("T")[0]);
-  const [incAmount, setIncAmount] = useState("");
-  const [incRate, setIncRate] = useState("0.65");
-  const [incCategory, setIncCategory] = useState("Upfront Commission");
-  const [incStatus, setIncStatus] = useState("Paid");
-  const [incNotes, setIncNotes] = useState("");
-
-  // Expense State
-  const [expenseItems, setExpenseItems] = useState<any[]>(() => {
-    const saved = localStorage.getItem("mag_expense_items");
-    if (saved) return JSON.parse(saved);
-    return [
-      { id: "exp-1", date: "2026-05-02", category: "Software Licences", amount: 420, payee: "NextGen Aggregator Platform", description: "Lending CRM monthly membership quota subscription" },
-      { id: "exp-2", date: "2026-05-10", category: "Compliance & Training", amount: 180, payee: "MFAA Association", description: "National compliance seminar attendance fee" },
-      { id: "exp-3", date: "2026-05-20", category: "Marketing Ads", amount: 1250, payee: "Google Search Campaigns", description: "Canberra home loan buyer keyword outreach ads" }
-    ];
-  });
-
-  useEffect(() => {
-    localStorage.setItem("mag_expense_items", JSON.stringify(expenseItems));
-  }, [expenseItems]);
-
-  // Add Expense Form States
-  const [showAddExpenseForm, setShowAddExpenseForm] = useState(false);
-  const [expDate, setExpDate] = useState(() => new Date().toISOString().split("T")[0]);
-  const [expCategory, setExpCategory] = useState("Software Licences");
-  const [expAmount, setExpAmount] = useState("");
-  const [expPayee, setExpPayee] = useState("");
-  const [expDesc, setExpDesc] = useState("");
-
-  // Invoicing State
-  const [invoiceItems, setInvoiceItems] = useState<any[]>(() => {
-    const saved = localStorage.getItem("mag_invoice_items");
-    if (saved) return JSON.parse(saved);
-    return [
-      { id: "INV-2026-001", date: "2026-05-08", dueDate: "2026-05-22", client: "Mortgage Australia Aggregator Group", details: "Harrison ACT Office ref", items: [{ description: "Brokerage commission claim split standard", qty: 1, price: 6200 }], status: "Paid", taxRate: 10, notes: "Processed automatically via NextGen aggregation node" },
-      { id: "INV-2026-002", date: "2026-05-29", dueDate: "2026-06-12", client: "Macquarie Lending Operations", details: "Sydney HQ Refinance Node", items: [{ description: "Upfront brokerage settlement fee share", qty: 1, price: 2850 }], status: "Paid", taxRate: 10, notes: "Receipt verified by Macquarie" },
-      { id: "INV-2026-003", date: "2026-06-02", dueDate: "2026-06-16", client: "Westpac Bank ACT Desk", details: "CBA Canberra branch ref 88", items: [{ description: "Advisory support split for professional mentoring", qty: 1, price: 1200 }], status: "Sent", taxRate: 10, notes: "Mentorship verification attached" }
-    ];
-  });
-
-  useEffect(() => {
-    localStorage.setItem("mag_invoice_items", JSON.stringify(invoiceItems));
-  }, [invoiceItems]);
-
-  // Add Invoice Form States
-  const [showAddInvoiceForm, setShowAddInvoiceForm] = useState(false);
-  const [invNum, setInvNum] = useState(() => `INV-2026-0${Math.floor(10 + Math.random() * 90)}`);
-  const [invDate, setInvDate] = useState(() => new Date().toISOString().split("T")[0]);
-  const [invDueDate, setInvDueDate] = useState(() => {
-    const d = new Date();
-    d.setDate(d.getDate() + 14);
-    return d.toISOString().split("T")[0];
-  });
-  const [invClient, setInvClient] = useState("");
-  const [invDetails, setInvDetails] = useState("");
-  const [invItemDesc, setInvItemDesc] = useState("Mortgage broker advisory commissions");
-  const [invItemPrice, setInvItemPrice] = useState("");
-  const [invItemQty, setInvItemQty] = useState("1");
-  const [invTaxRate, setInvTaxRate] = useState("10");
-  const [invNotes, setInvNotes] = useState("");
-  const [invStatus, setInvStatus] = useState("Sent");
-  const [selectedInvoicePreview, setSelectedInvoicePreview] = useState<any | null>(null);
-  const [simulatedUserSession, setSimulatedUserSession] = useState<any | null>(null);
-
-  // Load Submissions
-  const loadSubmissionsData = async () => {
-    setLoading(true);
-    try {
-      const data = await fetchSubmissions();
-      setSubmissions(data);
-      computeStats(data);
-    } catch (err) {
-      console.error("Database initialization parameters warning:", err);
-    } finally {
-      setLoading(false);
+    if (typeof window !== "undefined" && (window as any).storage) {
+      const r = await (window as any).storage.get(KEY);
+      if (r && r.value) return JSON.parse(r.value);
     }
-  };
+  } catch (e) { /* not found / unavailable */ }
+  const data = seed();
+  saveDB(data);
+  return data;
+}
 
-  const computeStats = (data: Submission[]) => {
-    const total = data.length;
-    const synced = data.filter(s => s.syncedToSheet).length;
-    const pending = total - synced;
-    
-    // Parse total target volume
-    const totalVolume = data.reduce((sum, item) => {
-      const amountStr = item.loanAmount || "";
-      const num = parseInt(amountStr.replace(/[^0-9]/g, "")) || 0;
-      return sum + num;
-    }, 0);
-
-    setStats({ total, synced, pending, totalVolume });
-  };
-
-  useEffect(() => {
-    if (isLoggedIn) {
-      loadSubmissionsData();
+async function saveDB(data: any) {
+  try {
+    localStorage.setItem(KEY, JSON.stringify(data));
+    if (typeof window !== "undefined" && (window as any).storage) {
+      await (window as any).storage.set(KEY, JSON.stringify(data));
     }
-  }, [isLoggedIn]);
+  } catch (e) { /* memory only */ }
+}
 
-  // Handle Login
-  const handleLoginSubmit = (e: React.FormEvent) => {
-    e.preventDefault();
-    setLoginError(null);
+/* ---------- helpers ---------- */
+const fmt = (n: number) => new Intl.NumberFormat("en-AU", { style: "currency", currency: "AUD", maximumFractionDigits: 0 }).format(n || 0);
+const fmt2 = (n: number) => new Intl.NumberFormat("en-AU", { style: "currency", currency: "AUD" }).format(n || 0);
+const uid = () => Math.random().toString(36).slice(2, 9);
+const invTotal = (inv: any) => inv.items.reduce((s: number, it: any) => s + it.qty * it.price, 0);
+const gstOf = (sub: number) => Math.round(sub * 0.1 * 100) / 100;
 
-    const checkEmail = email.trim().toLowerCase();
-    
-    if (checkEmail === "ezydigitalhub@gmail.com" && password === activeAdminPassword) {
-      setIsLoggedIn(true);
-      setLoginError(null);
-    } else {
-      setLoginError("Invalid combination. Confirm superadmin identity.");
-    }
-  };
+const PALETTE = ["#1f7a52", "#d9930a", "#2563eb", "#9333ea", "#0891b2", "#64748b"];
 
-  // Handle Send Reset Verification Code
-  const handleSendResetCode = (e: React.FormEvent) => {
-    e.preventDefault();
-    if (resetEmail.trim().toLowerCase() !== "ezydigitalhub@gmail.com") {
-      setResetNotification("Error: Email address does not match Superadmin owner account.");
-      return;
-    }
+/* ======================================================================= */
+export default function AdminPanel({ onBackToHome, isDarkMode = false, onToggleTheme }: AdminPanelProps) {
+  const [db, setDb] = useState<any>(null);
+  const [user, setUser] = useState<any>(null);
+  const [section, setSection] = useState("overview");
+  const [scope, setScope] = useState("all"); // all | mortgage | outsource
 
-    // Generate a random 6-digit code
-    const code = Math.floor(100000 + Math.random() * 900000).toString();
-    setGeneratedCode(code);
-    setResetStep(2);
-    setResetNotification("Verification instructions dispatched.");
+  useEffect(() => { loadDB().then((d) => { setDb(d); setUser(d.users[0]); }); }, []);
+  const commit = (next: any) => { setDb(next); saveDB(next); };
 
-    // Simulate sending an email with a visually stunning diagnostic toast box
-    setSimulatedMailInbox(`[Simulated Mail Box: ezydigitalhub@gmail.com]
-Subject: Admin Password Security Access Code
-Your verification authentication code is: ${code}`);
+  if (!db || !user) return <Splash />;
 
-    // Auto-remove notification after reading
-    setTimeout(() => {
-      setResetNotification(null);
-    }, 5000);
-  };
-
-  // Handle Verify Code
-  const handleVerifyResetCode = (e: React.FormEvent) => {
-    e.preventDefault();
-    if (resetCode === generatedCode) {
-      setResetStep(3);
-      setResetNotification("Code verified. Supply new password credentials below.");
-      setSimulatedMailInbox(null);
-    } else {
-      setResetNotification("Verification failed. Code mismatches or expired.");
-    }
-  };
-
-  // Handle Update Password
-  const handleUpdatePassword = (e: React.FormEvent) => {
-    e.preventDefault();
-    if (newPassword.length < 6) {
-      setResetNotification("Password must count at least 6 characters.");
-      return;
-    }
-    
-    setActiveAdminPassword(newPassword);
-    setResetStep(1);
-    setShowForgotFlow(false);
-    setResetEmail("");
-    setResetCode("");
-    setNewPassword("");
-    setSimulatedMailInbox(null);
-    alert("Superadmin password update processed. Log in using your new credentials.");
-  };
-
-  // Trigger Sheet Sync
-  const handleSheetSync = async () => {
-    // Get sheets user login token
-    const token = getAccessToken();
-    if (!token) {
-      alert("Authorize first using Google Auth at the bottom of the contact form!");
-      return;
-    }
-
-    setSyncing(true);
-    setSyncStatus(null);
-    try {
-      const res = await syncUnsyncedToSheets(token);
-      setSyncStatus(`Sync success! Created ${res.success} rows, failures: ${res.failed}.`);
-      loadSubmissionsData();
-    } catch (err: any) {
-      setSyncStatus("Failed to process Google Spreadsheet write operations. Re-authenticate standard permissions.");
-    } finally {
-      setSyncing(false);
-    }
-  };
-
-  // Delete submission
-  const handleDeleteSubmission = async (id: string) => {
-    if (!window.confirm("Delete lead capture from local storage registries permanently?")) return;
-    try {
-      await deleteDoc(doc(db, "submissions", id));
-      loadSubmissionsData();
-    } catch (err) {
-      alert("Database constraints prevented deletion.");
-    }
-  };
-
-  // Toggle synced status manually for debugging
-  const handleToggleSyncStatus = async (item: Submission) => {
-    if (!item.id) return;
-    try {
-      const docRef = doc(db, "submissions", item.id);
-      await updateDoc(docRef, { syncedToSheet: !item.syncedToSheet });
-      loadSubmissionsData();
-    } catch (err) {
-      alert("Failed to modify record state.");
-    }
-  };
-
-  // Filter Submissions
-  const filteredSubmissions = submissions.filter(s => {
-    const matchesSearch = 
-      s.name.toLowerCase().includes(searchQuery.toLowerCase()) ||
-      s.email.toLowerCase().includes(searchQuery.toLowerCase()) ||
-      s.phone.toLowerCase().includes(searchQuery.toLowerCase()) ||
-      s.loanType.toLowerCase().includes(searchQuery.toLowerCase());
-    
-    if (statusFilter === "pending") return matchesSearch && !s.syncedToSheet;
-    if (statusFilter === "synced") return matchesSearch && s.syncedToSheet;
-    return matchesSearch;
-  });
+  const can = (sec: string) => user.perms[sec] && user.perms[sec] !== "none";
+  const canEdit = (sec: string) => user.perms[sec] === "edit";
+  const visibleSections = SECTIONS.filter(can);
+  const activeSection = visibleSections.includes(section) ? section : visibleSections[0];
 
   return (
-    <div className="min-h-screen bg-[#010b1a] text-zinc-100 font-bai selection:bg-[#ff6900]/30 selection:text-white p-4 md:p-8 relative overflow-hidden">
-      
-      {/* Absolute Decorative Glow Matrix */}
-      <div className="absolute top-0 left-1/4 w-[500px] h-[500px] bg-[#004A99]/15 rounded-full blur-[120px] pointer-events-none" />
-      <div className="absolute bottom-0 right-1/4 w-[500px] h-[500px] bg-[#ff6900]/5 rounded-full blur-[140px] pointer-events-none" />
-
-      {/* Embedded Simulated Inbox Notifications */}
-      {simulatedMailInbox && (
-        <div className="fixed bottom-6 right-6 z-50 max-w-md bg-zinc-950/95 border border-[#ff6900] rounded-xl p-4 shadow-[0_4px_30px_rgba(255,105,0,0.25)] backdrop-blur-xl shrink-0">
-          <div className="flex items-center justify-between border-b border-zinc-900 pb-2 mb-2">
-            <span className="text-[10px] font-mono tracking-widest text-[#ff6900] font-bold uppercase flex items-center gap-1">
-              <span className="w-1.5 h-1.5 rounded-full bg-red-500 animate-ping" />
-              Simulated Mail Server Dispatch
-            </span>
-            <button onClick={() => setSimulatedMailInbox(null)} className="text-zinc-500 hover:text-white shrink-0">
-              <X className="w-3.5 h-3.5" />
-            </button>
-          </div>
-          <pre className="text-[10px] font-mono text-zinc-300 whitespace-pre-wrap leading-relaxed">
-            {simulatedMailInbox}
-          </pre>
-          <div className="mt-3 flex gap-2">
-            <button 
-              onClick={() => {
-                navigator.clipboard.writeText(generatedCode);
-                alert("Verification code copied.");
-              }}
-              className="text-[9px] font-mono bg-zinc-900 hover:bg-zinc-800 text-zinc-100 px-2 py-1 rounded border border-zinc-800 transition uppercase cursor-pointer"
-            >
-              Copy Verification Code
-            </button>
+    <div className="ezy-root">
+      <Styles />
+      <aside className="sidebar">
+        <div className="brand">
+          <div className="logo">EZY</div>
+          <div>
+            <div className="brand-name">EZY GROUP</div>
+            <div className="brand-sub">Business Console</div>
           </div>
         </div>
-      )}
-
-      {/* LOGIN OR RESET PAGE */}
-      {!isLoggedIn ? (
-        <div className="max-w-[420px] mx-auto mt-16 sm:mt-24 relative z-10">
-          
-          <div className="text-center space-y-3 mb-8">
-            <div className="inline-flex items-center justify-center w-12 h-12 bg-[#ff6900]/10 border border-[#ff6900]/30 rounded-xl text-[#ff6900]">
-              <FileSpreadsheet className="w-6 h-6" />
-            </div>
-            <div>
-              <h1 className="text-2xl font-extrabold font-display text-white tracking-tight">Superadmin Gateway</h1>
-              <p className="text-xs text-zinc-400 mt-1">Lending insights, pipeline analytics and sheets automation</p>
-            </div>
+        <nav>
+          {NAV.filter((n) => can(n.key)).map((n) => (
+            <button key={n.key}
+              className={`nav-item ${activeSection === n.key ? "active" : ""}`}
+              onClick={() => setSection(n.key)}>
+              <n.icon size={18} /> <span>{n.label}</span>
+            </button>
+          ))}
+        </nav>
+        <div className="sidebar-foot" style={{ display: "flex", flexDirection: "column", gap: "10px" }}>
+          <button 
+            className="btn sm full font-semibold" 
+            onClick={onBackToHome}
+            style={{ 
+              background: "#1a212a", 
+              borderColor: "#232b34", 
+              color: "#cdd3da", 
+              display: "flex", 
+              alignItems: "center", 
+              justifyContent: "center", 
+              gap: "6px",
+              cursor: "pointer"
+            }}
+          >
+            ← Customer Website
+          </button>
+          <div className="who">
+            <div className="who-name">{user.name}</div>
+            <div className="who-role">{user.role}</div>
           </div>
+        </div>
+      </aside>
 
-          <div className="bg-[#02132a] border border-[#004A99]/40 rounded-3xl p-6 sm:p-8 shadow-[0_10px_40px_rgba(0,74,153,0.15)] relative overflow-hidden">
-            <div className="absolute top-0 left-0 w-full h-[3px] bg-[#ff6900]" />
-
-            {!showForgotFlow ? (
-              // Standard Login
-              <form onSubmit={handleLoginSubmit} className="space-y-5">
-                <div className="space-y-1">
-                  <label className="block text-[11px] font-mono uppercase tracking-wider text-zinc-400">Owner Identifier (Email)</label>
-                  <div className="relative">
-                    <span className="absolute left-3.5 top-1/2 -translate-y-1/2 text-zinc-500">
-                      <Mail className="w-4 h-4" />
-                    </span>
-                    <input 
-                      type="email"
-                      required
-                      placeholder="ezydigitalhub@gmail.com"
-                      value={email}
-                      onChange={(e) => setEmail(e.target.value)}
-                      className="w-full pl-10 pr-4 py-2.5 bg-[#010b1a]/80 border border-[#004A99]/50 focus:border-[#ff6900] text-sm text-white rounded-xl focus:outline-none transition font-sans"
-                    />
-                  </div>
-                </div>
-
-                <div className="space-y-1">
-                  <div className="flex justify-between items-center">
-                    <label className="block text-[11px] font-mono uppercase tracking-wider text-zinc-400">Security passphrase</label>
-                    <button 
-                      type="button" 
-                      onClick={() => {
-                        setShowForgotFlow(true);
-                        setResetStep(1);
-                        setResetNotification(null);
-                      }}
-                      className="text-[10px] text-[#ff6900] hover:underline"
-                    >
-                      Forgot?
-                    </button>
-                  </div>
-                  <div className="relative">
-                    <span className="absolute left-3.5 top-1/2 -translate-y-1/2 text-zinc-500">
-                      <Lock className="w-4 h-4" />
-                    </span>
-                    <input 
-                      type="password"
-                      required
-                      placeholder="••••••••••••"
-                      value={password}
-                      onChange={(e) => setPassword(e.target.value)}
-                      className="w-full pl-10 pr-4 py-2.5 bg-[#010b1a]/80 border border-[#004A99]/50 focus:border-[#ff6900] text-sm text-white rounded-xl focus:outline-none transition font-sans"
-                    />
-                  </div>
-                </div>
-
-                {loginError && (
-                  <div className="bg-red-500/10 border border-red-500/20 text-red-400 text-xs p-3 rounded-lg flex items-center gap-2">
-                    <AlertTriangle className="w-4 h-4" />
-                    <span>{loginError}</span>
-                  </div>
-                )}
-
-                <button 
-                  type="submit"
-                  className="w-full py-2.5 bg-[#ff6900] hover:bg-[#e05c00] text-white font-bold text-xs uppercase tracking-wider rounded-xl transition duration-300 hover:shadow-[0_0_15px_rgba(255,105,0,0.35)] flex items-center justify-center gap-2 cursor-pointer"
-                >
-                  Retrieve Console
-                  <ArrowRight className="w-4 h-4" />
-                </button>
-              </form>
-            ) : (
-              // Password Reset Section
-              <div className="space-y-4">
-                <div className="flex items-center gap-2 text-zinc-400 text-xs mb-3">
-                  <ShieldCheck className="w-4 h-4 text-[#ff6900]" />
-                  <span>Administrative Verification Chain</span>
-                </div>
-
-                {resetNotification && (
-                  <div className="bg-zinc-900 border border-zinc-800 text-xs p-3 rounded-lg text-zinc-300 text-center">
-                    {resetNotification}
-                  </div>
-                )}
-
-                {resetStep === 1 && (
-                  <form onSubmit={handleSendResetCode} className="space-y-4">
-                    <p className="text-[11px] text-zinc-400 leading-relaxed">
-                      To safeguard active financial data structures, verification is required. Provide the registered admin account index to trigger a security token.
-                    </p>
-                    <div className="space-y-1">
-                      <label className="block text-[11px] font-mono uppercase tracking-wider text-zinc-500">Account Index</label>
-                      <input 
-                        type="email"
-                        required
-                        placeholder="ezydigitalhub@gmail.com"
-                        value={resetEmail}
-                        onChange={(e) => setResetEmail(e.target.value)}
-                        className="w-full px-4 py-2 bg-[#010b1a] border border-[#004A99]/50 focus:border-[#ff6900] text-xs text-white rounded-xl focus:outline-none transition font-sans"
-                      />
-                    </div>
-                    <button 
-                      type="submit"
-                      className="w-full py-2 bg-[#ff6900] hover:bg-[#e05c00] text-white text-xs font-bold uppercase tracking-wide rounded-xl transition cursor-pointer"
-                    >
-                      Dispatch Authorization Code
-                    </button>
-                  </form>
-                )}
-
-                {resetStep === 2 && (
-                  <form onSubmit={handleVerifyResetCode} className="space-y-4">
-                    <p className="text-[11px] text-[#ff6900] leading-relaxed">
-                      Verification code has been synchronized. Extract the token from the simulated mail dashboard popup in the bottom corner of your screen.
-                    </p>
-                    <div className="space-y-1">
-                      <label className="block text-[11px] font-mono uppercase tracking-wider text-zinc-500">6-Digit Code</label>
-                      <input 
-                        type="text"
-                        required
-                        maxLength={6}
-                        placeholder="••••••"
-                        value={resetCode}
-                        onChange={(e) => setResetCode(e.target.value)}
-                        className="w-full px-4 py-2 bg-[#010b1a] border border-[#004A99]/50 focus:border-[#ff6900] text-center tracking-[0.5em] text-sm text-white rounded-xl focus:outline-none transition font-sans"
-                      />
-                    </div>
-                    <button 
-                      type="submit"
-                      className="w-full py-2 bg-[#ff6900] hover:bg-[#e05c00] text-white text-xs font-bold uppercase tracking-wide rounded-xl transition cursor-pointer"
-                    >
-                      Authenticate Code
-                    </button>
-                  </form>
-                )}
-
-                {resetStep === 3 && (
-                  <form onSubmit={handleUpdatePassword} className="space-y-4">
-                    <p className="text-[11px] text-zinc-400">
-                      Supply the update secure passphrase string to reset admin credentials.
-                    </p>
-                    <div className="space-y-1">
-                      <label className="block text-[11px] font-mono uppercase tracking-wider text-zinc-500">New Password</label>
-                      <input 
-                        type="password"
-                        required
-                        placeholder="Enter secure password"
-                        value={newPassword}
-                        onChange={(e) => setNewPassword(e.target.value)}
-                        className="w-full px-4 py-2 bg-[#010b1a] border border-[#004A99]/50 focus:border-[#ff6900] text-xs text-white rounded-xl focus:outline-none transition font-sans"
-                      />
-                    </div>
-                    <button 
-                      type="submit"
-                      className="w-full py-2 bg-emerald-600 hover:bg-emerald-500 text-white text-xs font-bold uppercase tracking-wide rounded-xl transition cursor-pointer"
-                    >
-                      Commit Password Reset
-                    </button>
-                  </form>
-                )}
-
-                <div className="pt-2 text-center">
-                  <button 
-                    type="button" 
-                    onClick={() => {
-                      setShowForgotFlow(false);
-                      setSimulatedMailInbox(null);
-                    }}
-                    className="text-[10px] text-zinc-500 hover:text-white"
-                  >
-                    Return to normal authentication
-                  </button>
-                </div>
-              </div>
+      <main className="main">
+        <header className="topbar">
+          <div>
+            <h1>{NAV.find((n) => n.key === activeSection)?.label}</h1>
+            <p className="crumb">EZY Group · Australia</p>
+          </div>
+          <div className="top-controls">
+            <div className="scope">
+              {[["all", "Both Companies"], ["mortgage", "Ezy Mortgage"], ["outsource", "Ezy Outsource"]].map(([k, l]) => (
+                <button key={k} className={scope === k ? "on" : ""} onClick={() => setScope(k)}>{l}</button>
+              ))}
+            </div>
+            <select className="user-switch" value={user.id}
+              onChange={(e) => { setUser(db.users.find((u: any) => u.id === e.target.value)); }}>
+              {db.users.map((u: any) => <option key={u.id} value={u.id}>View as: {u.name} ({u.role})</option>)}
+            </select>
+            {onToggleTheme && (
+              <button
+                onClick={onToggleTheme}
+                title={isDarkMode ? "Switch to Light Mode" : "Switch to Dark Mode"}
+                style={{
+                  background: isDarkMode ? "#151c28" : "#fff",
+                  border: "1px solid",
+                  borderColor: isDarkMode ? "#1e2633" : "#e2ddd4",
+                  borderRadius: "9px",
+                  padding: "9px",
+                  display: "flex",
+                  alignItems: "center",
+                  justifyContent: "center",
+                  cursor: "pointer",
+                  color: isDarkMode ? "#ff6900" : "#2563eb",
+                  transition: "all 0.15s",
+                  height: "37px",
+                  width: "37px"
+                }}
+              >
+                {isDarkMode ? <Sun size={16} /> : <Moon size={16} />}
+              </button>
             )}
           </div>
+        </header>
 
-          <div className="text-center mt-6">
-            <button 
-              onClick={onBackToHome}
-              className="text-xs text-zinc-500 hover:text-[#ff6900] transition flex items-center gap-1 mx-auto"
-            >
-              ← Back to Client Portal Page
-            </button>
-          </div>
-
+        <div className="content">
+          {activeSection === "overview" && <Overview db={db} scope={scope} />}
+          {activeSection === "clients" && <Clients db={db} commit={commit} scope={scope} canEdit={canEdit("clients")} />}
+          {activeSection === "income" && <Income db={db} commit={commit} scope={scope} canEdit={canEdit("income")} />}
+          {activeSection === "expense" && <Expense db={db} commit={commit} scope={scope} canEdit={canEdit("expense")} />}
+          {activeSection === "invoices" && <Invoices db={db} commit={commit} scope={scope} canEdit={canEdit("invoices")} />}
+          {activeSection === "users" && <UsersMgmt db={db} commit={commit} canEdit={canEdit("users")} />}
         </div>
-      ) : (
-        // DASHBOARD PANEL LAYOUT
-        <div className="max-w-7xl mx-auto space-y-6 relative z-10">
-          
-          {/* Dashboard Header Bar */}
-          <div className="flex flex-wrap items-center justify-between gap-4 bg-[#02132a] border border-[#004A99]/30 p-5 rounded-3xl">
-            <div className="flex items-center gap-4">
-              <div className="w-12 h-12 rounded-2xl bg-[#ff6900]/10 border border-[#ff6900]/20 flex items-center justify-center text-[#ff6900] shrink-0">
-                <Settings className="w-6 h-6 animate-spin" style={{ animationDuration: '6s' }} />
-              </div>
-              <div>
-                <div className="flex items-center gap-2">
-                  <span className="text-[9px] font-mono tracking-wider text-[#ff6900] font-bold uppercase bg-[#ff6900]/10 px-2 py-0.5 rounded-full border border-[#ff6900]/20">
-                    SUPERADMIN ACTIVE
-                  </span>
-                  <span className="w-2 h-2 rounded-full bg-emerald-500" />
-                  <span className="text-[10px] text-zinc-400 font-mono">Live Monitoring</span>
-                </div>
-                <h1 className="text-xl font-bold font-display text-white mt-0.5">Shariff Lead Routing Desk</h1>
-              </div>
-            </div>
-
-            <div className="flex items-center gap-4">
-              <span className="text-xs text-zinc-400 hidden sm:block">
-                Registered Superadmin: <b className="text-white">ezydigitalhub@gmail.com</b>
-              </span>
-              <button 
-                onClick={() => {
-                  setIsLoggedIn(false);
-                  setEmail("");
-                  setPassword("");
-                }}
-                className="flex items-center gap-1.5 px-3.5 py-2 bg-red-950/20 hover:bg-red-950/40 border border-red-500/20 text-red-400 rounded-xl text-xs transition font-semibold cursor-pointer"
-              >
-                <LogOut className="w-3.5 h-3.5" />
-                Logout console
-              </button>
-              <button 
-                onClick={onBackToHome}
-                className="px-3.5 py-2 bg-zinc-900 hover:bg-zinc-800 border border-zinc-800 text-zinc-300 rounded-xl text-xs transition font-bold cursor-pointer"
-              >
-                Go to Website
-              </button>
-            </div>
-          </div>
-
-          {/* Active Simulation Sandbox Notifications Banner */}
-          {simulatedUserSession && (
-            <div className="bg-amber-500/10 border border-amber-500/30 p-3.5 rounded-2xl flex flex-wrap items-center justify-between gap-3 text-xs text-amber-200">
-              <div className="flex items-center gap-2">
-                <div className="w-2.5 h-2.5 rounded-full bg-amber-400 animate-ping shrink-0" />
-                <span>
-                  Active Restricted View Sandbox: Impersonating <b>{simulatedUserSession.name}</b> ({simulatedUserSession.role}). 
-                  You only see options permitted in User Management!
-                </span>
-              </div>
-              <button 
-                onClick={() => setSimulatedUserSession(null)}
-                className="px-3 py-1 bg-amber-500 hover:bg-[#ff6900] text-black hover:text-white font-extrabold text-[10px] uppercase rounded-lg transition shrink-0 select-none cursor-pointer"
-              >
-                Cancel Impersonation
-              </button>
-            </div>
-          )}
-
-          {/* Side-by-Side Sidebar and Viewport columns */}
-          <div className="flex flex-col lg:flex-row gap-6 items-start">
-            
-            {/* Sidebar Menu Panel */}
-            <div className="w-full lg:w-64 shrink-0 bg-[#02132a] border border-[#004A99]/20 p-5 rounded-3xl space-y-2">
-              <div className="pb-3 border-b border-[#004A99]/15">
-                <span className="block text-[9px] font-mono uppercase tracking-widest text-[#ff6900] font-bold">Admin Directory</span>
-                <h3 className="text-sm font-bold text-white mt-1">Practice Control Hub</h3>
-              </div>
-              
-              <div className="space-y-1 pt-2">
-                {[
-                  { id: "overview", label: "Overview Panel", icon: LayoutDashboard },
-                  { id: "users", label: "User Management", icon: Users },
-                  { id: "income", label: "Income Tracker", icon: CreditCard },
-                  { id: "expense", label: "Expense Ledger", icon: Receipt },
-                  { id: "invoices", label: "Invoicing System", icon: FileText }
-                ].map((item) => {
-                  const allowedTabsList = simulatedUserSession
-                    ? simulatedUserSession.allowedMenus
-                    : ["overview", "users", "income", "expense", "invoices"];
-
-                  if (!allowedTabsList.includes(item.id)) return null;
-                  const IconComp = item.icon;
-                  const isActive = activeTab === item.id;
-                  return (
-                    <button
-                      key={item.id}
-                      onClick={() => setActiveTab(item.id)}
-                      className={`w-full flex items-center justify-between px-4 py-2.5 rounded-xl text-left text-xs font-semibold tracking-wide transition-all duration-300 cursor-pointer ${
-                        isActive
-                          ? "bg-[#ff6900] text-white shadow-lg shadow-[#ff6900]/20"
-                          : "text-zinc-400 hover:text-white hover:bg-[#004A99]/15"
-                      }`}
-                    >
-                      <span className="flex items-center gap-3">
-                        <IconComp className={`w-4 h-4 ${isActive ? "text-white" : "text-zinc-500"}`} />
-                        {item.label}
-                      </span>
-                      {item.id === "users" && adminUsers.length > 0 && (
-                        <span className={`px-1.5 py-0.5 text-[10px] font-mono font-bold rounded ${isActive ? "bg-white/20 text-white" : "bg-[#004A99]/40 text-blue-200"}`}>
-                          {adminUsers.length}
-                        </span>
-                      )}
-                      {item.id === "income" && incomeItems.length > 0 && (
-                        <span className={`px-1.5 py-0.5 text-[10px] font-mono font-bold rounded ${isActive ? "bg-white/20 text-white" : "bg-emerald-500/20 text-emerald-300"}`}>
-                          {incomeItems.length}
-                        </span>
-                      )}
-                      {item.id === "invoices" && invoiceItems.length > 0 && (
-                        <span className={`px-1.5 py-0.5 text-[10px] font-mono font-bold rounded ${isActive ? "bg-white/20 text-white" : "bg-[#ff6900]/25 text-amber-200"}`}>
-                          {invoiceItems.length}
-                        </span>
-                      )}
-                    </button>
-                  );
-                })}
-              </div>
-
-              <div className="pt-4 border-t border-[#004A99]/15 text-center">
-                <span className="text-[10px] text-zinc-500 font-mono">
-                  Settle Time: 12:03 UTC
-                </span>
-              </div>
-            </div>
-
-            {/* Main Tab Viewport */}
-            <div className="flex-1 w-full space-y-6">
-              
-              {/* Conditional Viewport Panels */}
-              {activeTab === "overview" && (
-                <div className="space-y-6">
-                  {/* Metric Cards Matrix */}
-                  <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
-            
-            {/* Total leads card */}
-            <div className="bg-[#02132a] border border-[#004A99]/20 p-5 rounded-2xl relative overflow-hidden group">
-              <div className="absolute top-0 right-0 w-24 h-24 bg-[#004A99]/5 rounded-full blur-xl pointer-events-none" />
-              <div className="flex justify-between items-start">
-                <div className="space-y-1.5">
-                  <span className="block text-[10px] font-mono tracking-wider text-zinc-500 uppercase">Grand Inbox Leads</span>
-                  <span className="block text-2xl font-extrabold text-white tracking-tight leading-none">
-                    {loading ? "..." : stats.total}
-                  </span>
-                  <p className="text-[10px] text-zinc-400 mt-2">Overall captured inquiries</p>
-                </div>
-                <div className="p-2.5 bg-[#004A99]/10 rounded-xl text-[#004A99] border border-[#004A99]/20">
-                  <Users className="w-5 h-5" />
-                </div>
-              </div>
-            </div>
-
-            {/* Synced to spreadsheets */}
-            <div className="bg-[#02132a] border border-[#004A99]/20 p-5 rounded-2xl relative overflow-hidden group">
-              <div className="absolute top-0 right-0 w-24 h-24 bg-emerald-500/5 rounded-full blur-xl pointer-events-none" />
-              <div className="flex justify-between items-start">
-                <div className="space-y-1.5">
-                  <span className="block text-[10px] font-mono tracking-wider text-emerald-500 uppercase">Synchronized Row Count</span>
-                  <span className="block text-2xl font-extrabold text-emerald-400 tracking-tight leading-none">
-                    {loading ? "..." : stats.synced}
-                  </span>
-                  <p className="text-[10px] text-zinc-400 mt-2">Successfully appended columns</p>
-                </div>
-                <div className="p-2.5 bg-emerald-500/10 rounded-xl text-emerald-400 border border-emerald-500/20">
-                  <CheckCircle2 className="w-5 h-5" />
-                </div>
-              </div>
-            </div>
-
-            {/* Pending synchronization */}
-            <div className="bg-[#02132a] border border-[#004A99]/20 p-5 rounded-2xl relative overflow-hidden group">
-              <div className="absolute top-0 right-0 w-24 h-24 bg-[#ff6900]/5 rounded-full blur-xl pointer-events-none" />
-              <div className="flex justify-between items-start">
-                <div className="space-y-1.5">
-                  <span className="block text-[10px] font-mono tracking-wider text-[#ff6900] uppercase">Pending Integration Synced</span>
-                  <span className="block text-2xl font-extrabold text-[#ff6900] tracking-tight leading-none">
-                    {loading ? "..." : stats.pending}
-                  </span>
-                  <p className="text-[10px] text-zinc-400 mt-2">Captured locally in Firestore</p>
-                </div>
-                <div className="p-2.5 bg-[#ff6900]/10 rounded-xl text-[#ff6900] border border-[#ff6900]/20">
-                  <Clock className="w-5 h-5 animate-pulse" />
-                </div>
-              </div>
-            </div>
-
-            {/* Total pipeline volume value */}
-            <div className="bg-[#02132a] border border-[#004A99]/20 p-5 rounded-2xl relative overflow-hidden group">
-              <div className="absolute top-0 right-0 w-24 h-24 bg-blue-400/5 rounded-full blur-xl pointer-events-none" />
-              <div className="flex justify-between items-start">
-                <div className="space-y-1.5">
-                  <span className="block text-[10px] font-mono tracking-wider text-blue-400 uppercase">Inquired Capital Volume</span>
-                  <span className="block text-xl font-extrabold text-white tracking-tight leading-none">
-                    ${(stats.totalVolume / 1000000).toFixed(2)}M AUD
-                  </span>
-                  <p className="text-[10px] text-zinc-400 mt-2">Combined home loans value bounds</p>
-                </div>
-                <div className="p-2.5 bg-blue-500/10 rounded-xl text-blue-400 border border-blue-500/20">
-                  <TrendingUp className="w-5 h-5" />
-                </div>
-              </div>
-            </div>
-
-          </div>
-
-          {/* Integrated Charts & Manual Sheet Controller */}
-          <div className="grid grid-cols-1 lg:grid-cols-12 gap-6">
-
-            {/* Google Sheets Trigger Station */}
-            <div className="lg:col-span-4 bg-[#02132a] border border-[#004A99]/20 p-6 rounded-3xl space-y-5">
-              <div>
-                <span className="block text-[9px] font-mono uppercase tracking-widest text-[#ff6900] font-bold">Sheets Sync Engine</span>
-                <h3 className="text-base font-bold text-white mt-1">Google Sheets Control Deck</h3>
-                <p className="text-xs text-zinc-400 mt-1 leading-relaxed">
-                  Triggers immediate structural cell transfers directly into the linked Google Sheets ledger file. Keep data pipelines clean.
-                </p>
-              </div>
-
-              <div className="p-4 bg-[#010b1a]/80 border border-[#004A99]/40 rounded-2xl text-xs space-y-2">
-                <div className="flex items-center justify-between">
-                  <span className="text-zinc-500">Destination File URL:</span>
-                  <span className="text-[10px] font-bold text-zinc-300">Spreadsheet Matrix</span>
-                </div>
-                <p className="font-mono text-[10px] text-zinc-400 break-all select-all font-sans">
-                  {SPREADSHEET_ID}
-                </p>
-                <a 
-                  href={`https://docs.google.com/spreadsheets/d/${SPREADSHEET_ID}/edit`}
-                  target="_blank"
-                  rel="noreferrer"
-                  className="flex items-center gap-1 text-[10px] text-[#ff6900] font-semibold hover:underline mt-1"
-                >
-                  View Live in Google Sheets Hub
-                  <ExternalLink className="w-3 h-3" />
-                </a>
-              </div>
-
-              {syncStatus && (
-                <div className="p-3 bg-[#010b1a]/60 border border-[#ff6900]/20 text-zinc-300 rounded-xl text-xs space-y-1">
-                  <div className="flex items-center gap-1.5 text-xs text-[#ff6900] font-bold">
-                    <AlertTriangle className="w-4 h-4" />
-                    <span>Engine Output Note</span>
-                  </div>
-                  <p className="opacity-90">{syncStatus}</p>
-                </div>
-              )}
-
-              <button 
-                onClick={handleSheetSync}
-                disabled={syncing || stats.pending === 0}
-                className="w-full py-3.5 bg-gradient-to-r from-[#ff6900] to-[#e05c00] text-white font-bold text-xs uppercase tracking-wider rounded-xl transition duration-300 hover:shadow-[0_0_20px_rgba(255,105,0,0.3)] disabled:opacity-50 disabled:hover:shadow-none cursor-pointer flex items-center justify-center gap-2"
-              >
-                <RefreshCw className={`w-4 h-4 ${syncing ? "animate-spin" : ""}`} />
-                {syncing ? "Publishing rows..." : stats.pending === 0 ? "Spreadsheet fully synced" : `Append ${stats.pending} pending rows`}
-              </button>
-
-              <div className="text-[10px] text-zinc-500 font-mono text-center flex items-center justify-center gap-1.5">
-                <ShieldCheck className="w-3.5 h-3.5 text-emerald-500" />
-                <span>Authorized with credential index</span>
-              </div>
-            </div>
-
-            {/* SVG Visual Chart Analytics (Replaces heavy recharts packages) */}
-            <div className="lg:col-span-8 bg-[#02132a] border border-[#004A99]/20 p-6 rounded-3xl flex flex-col justify-between">
-              <div className="flex justify-between items-start flex-wrap gap-2">
-                <div>
-                  <span className="block text-[9px] font-mono uppercase tracking-widest text-zinc-500">Pipeline telemetry</span>
-                  <h3 className="text-base font-bold text-white mt-1">Lead Submission Distribution</h3>
-                </div>
-                <div className="flex items-center gap-4 text-[10px] font-mono text-zinc-400">
-                  <span className="flex items-center gap-1.5">
-                    <span className="w-2.5 h-2.5 rounded-full bg-[#ff6900]" />
-                    First Home Purchase
-                  </span>
-                  <span className="flex items-center gap-1.5">
-                    <span className="w-2.5 h-2.5 rounded-full bg-[#004A99]" />
-                    Refinancing
-                  </span>
-                </div>
-              </div>
-
-              {/* Majestic SVG Area Chart Visual */}
-              <div className="h-52 w-full mt-6 relative">
-                {submissions.length === 0 ? (
-                  <div className="absolute inset-0 flex items-center justify-center text-xs text-zinc-500 italic">
-                    Capture more client submissions to render trends
-                  </div>
-                ) : (
-                  <svg className="w-full h-full overflow-visible" viewBox="0 0 500 150" preserveAspectRatio="none">
-                    <defs>
-                      <linearGradient id="chartGlow" x1="0" y1="0" x2="0" y2="1">
-                        <stop offset="0%" stopColor="#ff6900" stopOpacity="0.25"/>
-                        <stop offset="100%" stopColor="#ff6900" stopOpacity="0"/>
-                      </linearGradient>
-                    </defs>
-                    
-                    {/* Grid lines */}
-                    <line x1="0" y1="30" x2="500" y2="30" stroke="#004A99" strokeOpacity="0.1" strokeWidth="1" strokeDasharray="4 4" />
-                    <line x1="0" y1="75" x2="500" y2="75" stroke="#004A99" strokeOpacity="0.1" strokeWidth="1" strokeDasharray="4 4" />
-                    <line x1="0" y1="120" x2="500" y2="120" stroke="#004A99" strokeOpacity="0.1" strokeWidth="1" strokeDasharray="4 4" />
-
-                    {/* Chart path representing simulated pipeline frequency */}
-                    <path
-                      d="M 0,130 C 50,110 100,50 150,80 C 200,105 250,30 300,50 C 350,70 400,20 450,10 L 500,20 L 500,150 L 0,150 Z"
-                      fill="url(#chartGlow)"
-                    />
-                    <path
-                      d="M 0,130 C 50,110 100,50 150,80 C 200,105 250,30 300,50 C 350,70 400,20 450,10 L 500,20"
-                      fill="none"
-                      stroke="#ff6900"
-                      strokeWidth="3"
-                      strokeLinecap="round"
-                    />
-
-                    {/* Anchor point glow markers */}
-                    <circle cx="150" cy="80" r="4.5" fill="#010b1a" stroke="#ff6900" strokeWidth="3" />
-                    <circle cx="300" cy="50" r="4.5" fill="#010b1a" stroke="#ff6900" strokeWidth="3" />
-                    <circle cx="450" cy="10" r="4.5" fill="#010b1a" stroke="#ff6900" strokeWidth="3" />
-                  </svg>
-                )}
-              </div>
-
-              <div className="flex justify-between items-center text-[10px] text-zinc-500 font-mono mt-2 pt-2 border-t border-[#004A99]/10">
-                <span>Scenario Baseline Start</span>
-                <span>Active Engagement Intersect</span>
-                <span>Max Target Capacity Reached</span>
-              </div>
-            </div>
-
-          </div>
-
-          {/* Submissions Lead Registry table */}
-          <div className="bg-[#02132a] border border-[#004A99]/20 rounded-3xl p-6 space-y-6">
-            
-            <div className="flex flex-wrap items-center justify-between gap-4">
-              <div>
-                <span className="block text-[9px] font-mono uppercase tracking-widest text-zinc-500">Pipeline Matrix</span>
-                <h3 className="text-base font-bold text-white mt-0.5">Leads Database Registry</h3>
-              </div>
-
-              {/* Filter controls */}
-              <div className="flex flex-wrap items-center gap-3 w-full sm:w-auto">
-                {/* Search input */}
-                <div className="relative w-full sm:w-64">
-                  <span className="absolute left-3 top-1/2 -translate-y-1/2 text-zinc-500">
-                    <Search className="w-3.5 h-3.5" />
-                  </span>
-                  <input 
-                    type="text"
-                    placeholder="Search client index..."
-                    value={searchQuery}
-                    onChange={(e) => setSearchQuery(e.target.value)}
-                    className="w-full pl-8.5 pr-3 py-1.5 bg-[#010b1a] border border-[#004A99]/40 focus:border-[#ff6900] text-xs rounded-xl focus:outline-none transition text-white"
-                  />
-                </div>
-
-                {/* Filter buttons */}
-                <div className="flex bg-[#010b1a] border border-[#004A99]/40 p-1 rounded-xl shrink-0">
-                  <button 
-                    onClick={() => setStatusFilter("all")}
-                    className={`px-3 py-1 text-[10px] font-semibold rounded-lg uppercase tracking-wide transition cursor-pointer ${statusFilter === "all" ? "bg-[#ff6900]/10 text-[#ff6900]" : "text-zinc-400"}`}
-                  >
-                    All
-                  </button>
-                  <button 
-                    onClick={() => setStatusFilter("pending")}
-                    className={`px-3 py-1 text-[10px] font-semibold rounded-lg uppercase tracking-wide transition cursor-pointer ${statusFilter === "pending" ? "bg-[#ff6900]/10 text-[#ff6900]" : "text-zinc-400"}`}
-                  >
-                    Pending
-                  </button>
-                  <button 
-                    onClick={() => setStatusFilter("synced")}
-                    className={`px-3 py-1 text-[10px] font-semibold rounded-lg uppercase tracking-wide transition cursor-pointer ${statusFilter === "synced" ? "bg-[#ff6900]/10 text-[#ff6900]" : "text-zinc-400"}`}
-                  >
-                    Synced
-                  </button>
-                </div>
-              </div>
-            </div>
-
-            {loading ? (
-              <div className="flex items-center justify-center py-12 text-zinc-500 gap-2 text-xs">
-                <RefreshCw className="w-5 h-5 animate-spin text-[#ff6900]" />
-                Pulling leads database indexes...
-              </div>
-            ) : filteredSubmissions.length === 0 ? (
-              <div className="text-center py-12 text-zinc-500 italic text-xs">
-                No matching submission rows registered in database.
-              </div>
-            ) : (
-              <div className="overflow-x-auto border border-[#004A99]/20 rounded-2xl bg-[#010b1a]/40">
-                <table className="w-full text-left border-collapse text-xs">
-                  <thead>
-                    <tr className="bg-[#02132a]/80 border-b border-[#004A99]/20 text-zinc-400 font-semibold uppercase font-mono tracking-wider text-[9px]">
-                      <th className="p-4">Submission ID</th>
-                      <th className="p-4">Client Details</th>
-                      <th className="p-4">Loan Requirement</th>
-                      <th className="p-4">Capital Target</th>
-                      <th className="p-4">System Status</th>
-                      <th className="p-4 text-center">Sheet Override</th>
-                      <th className="p-4 text-right">Actions</th>
-                    </tr>
-                  </thead>
-                  <tbody className="divide-y divide-[#004A99]/10">
-                    {filteredSubmissions.map((sub) => (
-                      <tr key={sub.id} className="hover:bg-[#004A99]/5 text-zinc-300 transition">
-                        <td className="p-4 font-mono text-[10px] text-zinc-500">
-                          #{sub.id?.slice(0, 8) || "N/A"}
-                        </td>
-                        <td className="p-4">
-                          <span className="font-extrabold text-white block text-sm">{sub.name}</span>
-                          <span className="text-[10px] text-zinc-400 block mt-0.5">{sub.email}</span>
-                          <span className="text-[10px] text-zinc-400 block font-mono font-sans mt-0.5">{sub.phone}</span>
-                        </td>
-                        <td className="p-4 text-zinc-300 font-medium">
-                          <span className="px-2 py-0.5 rounded-full bg-[#004A99]/20 text-blue-300 text-[10px] font-semibold border border-[#004A99]/30">
-                            {sub.loanType || "Home Loan"}
-                          </span>
-                        </td>
-                        <td className="p-4 font-mono font-medium text-white">
-                          {sub.loanAmount || "N/A"}
-                        </td>
-                        <td className="p-4">
-                          {sub.syncedToSheet ? (
-                            <span className="inline-flex items-center gap-1 text-[10px] font-semibold text-emerald-400 bg-emerald-500/10 px-2 py-0.5 rounded-full border border-emerald-500/20">
-                              <span className="w-1 h-1 rounded-full bg-emerald-500" />
-                              Synced to Sheet
-                            </span>
-                          ) : (
-                            <span className="inline-flex items-center gap-1 text-[10px] font-semibold text-[#ff6900] bg-[#ff6900]/10 px-2 py-0.5 rounded-full border border-[#ff6900]/20">
-                              <span className="w-1.5 h-1.5 rounded-full bg-[#ff6900] animate-pulse" />
-                              Firestore Only
-                            </span>
-                          )}
-                        </td>
-                        <td className="p-4 text-center">
-                          <button
-                            onClick={() => handleToggleSyncStatus(sub)}
-                            className="text-[10px] font-semibold text-[#004A99] hover:text-[#ff6900] bg-[#02132a]/80 px-2.5 py-1 rounded-lg border border-[#004A99]/20 hover:border-[#ff6900]/30 transition uppercase cursor-pointer"
-                            title="Force toggles synchronization status"
-                          >
-                            Toggle State
-                          </button>
-                        </td>
-                        <td className="p-4 text-right">
-                          <div className="flex justify-end gap-1.5">
-                            <button
-                              onClick={() => setSelectedSubmission(sub)}
-                              className="p-2 bg-[#02132a]/80 hover:bg-[#ff6900]/10 hover:text-[#ff6900] text-zinc-400 rounded-xl border border-[#004A99]/30 hover:border-[#ff6900]/40 transition cursor-pointer"
-                              title="Review Scenario message text"
-                            >
-                              <FileText className="w-4 h-4" />
-                            </button>
-                            <button
-                              onClick={() => sub.id && handleDeleteSubmission(sub.id)}
-                              className="p-2 bg-red-950/20 hover:bg-red-950/40 text-red-400 rounded-xl border border-red-500/10 hover:border-red-500/30 transition cursor-pointer"
-                              title="Delete permanently"
-                            >
-                              <Trash2 className="w-4 h-4" />
-                            </button>
-                          </div>
-                        </td>
-                      </tr>
-                    ))}
-                  </tbody>
-                </table>
-              </div>
-            )}
-          </div>
-
-                </div>
-              )}
-
-              {activeTab === "users" && (
-                <UserManagement
-                  adminUsers={adminUsers}
-                  setAdminUsers={setAdminUsers}
-                  activeTab={activeTab}
-                  setActiveTab={setActiveTab}
-                  setSimulatedUserSession={setSimulatedUserSession}
-                />
-              )}
-
-              {activeTab === "income" && (
-                <IncomeTracker
-                  incomeItems={incomeItems}
-                  setIncomeItems={setIncomeItems}
-                />
-              )}
-
-              {activeTab === "expense" && (
-                <ExpenseTracker
-                  expenseItems={expenseItems}
-                  setExpenseItems={setExpenseItems}
-                />
-              )}
-
-              {activeTab === "invoices" && (
-                <InvoicingSystem
-                  invoiceItems={invoiceItems}
-                  setInvoiceItems={setInvoiceItems}
-                />
-              )}
-
-            </div>
-          </div>
-
-        </div>
-      )}
-
-      {/* LEAD DETAIL DIALOG DRAWER OVERLAY */}
-      {selectedSubmission && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/80 backdrop-blur-md">
-          <div className="bg-[#02132a] border border-[#004A99]/30 rounded-3xl max-w-lg w-full relative overflow-hidden shadow-[0_10px_45px_rgba(0,0,0,0.8)]">
-            
-            <div className="absolute top-0 left-0 w-full h-[4px] bg-[#ff6900]" />
-
-            <div className="p-6 border-b border-[#004A99]/10 flex items-center justify-between">
-              <div className="flex items-center gap-3">
-                <div className="w-9 h-9 bg-[#ff6900]/10 border border-[#ff6900]/20 text-[#ff6900] rounded-xl flex items-center justify-center">
-                  <FileText className="w-5 h-5" />
-                </div>
-                <div>
-                  <h3 className="font-bold text-white text-base">Client Scenario Dossier</h3>
-                  <p className="text-[10px] font-mono text-zinc-400 mt-0.5">ID: {selectedSubmission.id}</p>
-                </div>
-              </div>
-              <button 
-                onClick={() => setSelectedSubmission(null)}
-                className="p-1 text-zinc-500 hover:text-white rounded-lg hover:bg-[#004A99]/20 transition cursor-pointer shrink-0"
-              >
-                <X className="w-5 h-5" />
-              </button>
-            </div>
-
-            <div className="p-6 space-y-5 text-xs max-h-[350px] overflow-y-auto">
-              {/* Contact Data Card */}
-              <div className="space-y-3 bg-[#010b1a]/60 border border-[#004A99]/20 p-4 rounded-xl">
-                <h4 className="text-[10px] font-mono tracking-wider font-semibold text-zinc-500 uppercase">Contact index details</h4>
-                <div className="grid grid-cols-2 gap-4">
-                  <div>
-                    <span className="block text-zinc-500 text-[10px] uppercase">Contact Name</span>
-                    <span className="text-white text-sm font-bold block mt-0.5">{selectedSubmission.name}</span>
-                  </div>
-                  <div>
-                    <span className="block text-zinc-500 text-[10px] uppercase">Phone/Mobile Number</span>
-                    <a href={`tel:${selectedSubmission.phone}`} className="text-[#ff6900] text-sm hover:underline font-bold block mt-0.5">{selectedSubmission.phone}</a>
-                  </div>
-                  <div className="col-span-2">
-                    <span className="block text-zinc-500 text-[10px] uppercase">Secure Email Index</span>
-                    <a href={`mailto:${selectedSubmission.email}`} className="text-blue-400 font-semibold text-sm hover:underline block mt-0.5">{selectedSubmission.email}</a>
-                  </div>
-                </div>
-              </div>
-
-              {/* Loan requirements card */}
-              <div className="grid grid-cols-2 gap-4 bg-[#010b1a]/60 border border-[#004A99]/20 p-4 rounded-xl">
-                <div>
-                  <span className="block text-zinc-500 text-[10px] uppercase">Mortgage Type</span>
-                  <span className="text-white text-sm font-bold block mt-0.5">{selectedSubmission.loanType}</span>
-                </div>
-                <div>
-                  <span className="block text-zinc-500 text-[10px] uppercase">Financing Target Capital</span>
-                  <span className="text-white text-sm font-bold block mt-0.5">{selectedSubmission.loanAmount}</span>
-                </div>
-              </div>
-
-              {/* Message Block */}
-              <div className="space-y-2">
-                <span className="block font-mono text-[9px] uppercase tracking-widest text-zinc-500">Scenario details & client notes</span>
-                <div className="p-4 bg-[#010b1a]/40 border border-[#004A99]/10 rounded-xl text-zinc-300 leading-relaxed max-h-32 overflow-y-auto italic">
-                  {selectedSubmission.message ? `"${selectedSubmission.message}"` : "(Client submitted details without message segment text)"}
-                </div>
-              </div>
-            </div>
-
-            <div className="p-6 border-t border-[#004A99]/10 bg-[#010b1a]/20 flex justify-end gap-3 text-xs">
-              <button 
-                onClick={() => setSelectedSubmission(null)}
-                className="px-4 py-2 bg-zinc-900 border border-zinc-800 text-zinc-300 hover:text-white rounded-xl transition cursor-pointer"
-              >
-                Close details window
-              </button>
-              <button 
-                onClick={() => {
-                  window.open(`mailto:${selectedSubmission.email}?subject=Direct response to your mortgage inquiry scenario&body=Hi ${selectedSubmission.name}, thanks for reaching out to Shariff Rahman mortgage broker.`);
-                }}
-                className="px-4 py-2 bg-[#ff6900] hover:bg-[#e05c00] text-white font-bold rounded-xl transition cursor-pointer"
-              >
-                Email response
-              </button>
-            </div>
-
-          </div>
-        </div>
-      )}
-
+      </main>
     </div>
   );
+}
+
+const NAV = [
+  { key: "overview", label: "Overview", icon: LayoutDashboard },
+  { key: "clients", label: "Client List", icon: Users },
+  { key: "income", label: "Income", icon: TrendingUp },
+  { key: "expense", label: "Expense", icon: Wallet },
+  { key: "invoices", label: "Invoice System", icon: FileText },
+  { key: "users", label: "User Management", icon: ShieldCheck },
+];
+
+/* ============================ OVERVIEW ============================ */
+function Overview({ db, scope }: { db: any; scope: string }) {
+  const inScope = (c: string) => scope === "all" || c === scope;
+  const income = db.income.filter((i: any) => inScope(i.company));
+  const expenses = db.expenses.filter((e: any) => inScope(e.company));
+
+  const totalIncome = income.reduce((s: number, i: any) => s + i.amount, 0);
+  const paid = income.filter((i: any) => i.status === "paid").reduce((s: number, i: any) => s + i.amount, 0);
+  const unpaid = totalIncome - paid;
+  const totalExpense = expenses.reduce((s: number, e: any) => s + e.amount, 0);
+  const net = totalIncome - totalExpense;
+
+  const byCompany = Object.keys(COMPANIES).map((k, idx) => ({
+    name: k === "mortgage" ? "Ezy Mortgage" : "Ezy Outsource",
+    value: db.income.filter((i: any) => i.company === k).reduce((s: number, i: any) => s + i.amount, 0),
+    color: PALETTE[idx],
+  })).filter((d) => scope === "all" || (scope === "mortgage" && d.name.includes("Mortgage")) || (scope === "outsource" && d.name.includes("Outsource")));
+
+  const paidData = [
+    { name: "Paid", value: paid, color: "#1f7a52" },
+    { name: "Outstanding", value: unpaid, color: "#d9930a" },
+  ];
+
+  const expByCat = EXPENSE_CATEGORIES.map((cat, idx) => ({
+    name: cat, value: expenses.filter((e: any) => e.category === cat).reduce((s: number, e: any) => s + e.amount, 0), color: PALETTE[idx],
+  })).filter((d) => d.value > 0);
+
+  return (
+    <div className="stack">
+      <div className="cards">
+        <Stat label="Total Income" value={fmt(totalIncome)} tone="green" sub={`${income.length} entries`} />
+        <Stat label="Total Expense" value={fmt(totalExpense)} tone="blue" sub={`${expenses.length} entries`} />
+        <Stat label="Paid / Received" value={fmt(paid)} tone="green2" sub={`${income.filter((i: any)=>i.status==='paid').length} paid`} />
+        <Stat label="Outstanding" value={fmt(unpaid)} tone="amber" sub={`${income.filter((i: any)=>i.status==='unpaid').length} unpaid`} />
+      </div>
+
+      <div className="cards">
+        <Stat label="Net Position" value={fmt(net)} tone={net >= 0 ? "green" : "red"} sub="Income − Expense" wide />
+      </div>
+
+      <div className="chart-grid">
+        <Panel title="Income by Company">
+          <DonutChart data={byCompany} />
+        </Panel>
+        <Panel title="Paid vs Outstanding">
+          <DonutChart data={paidData} />
+        </Panel>
+        <Panel title="Expense Breakdown">
+          <DonutChart data={expByCat} />
+        </Panel>
+      </div>
+
+      <Panel title="Income vs Expense by Company">
+        <ResponsiveContainer width="100%" height={260}>
+          <BarChart data={Object.keys(COMPANIES).filter(k=>scope==='all'||k===scope).map((k) => ({
+            name: k === "mortgage" ? "Ezy Mortgage" : "Ezy Outsource",
+            Income: db.income.filter((i: any) => i.company === k).reduce((s: number, i: any) => s + i.amount, 0),
+            Expense: db.expenses.filter((e: any) => e.company === k).reduce((s: number, e: any) => s + e.amount, 0),
+          }))}>
+            <CartesianGrid strokeDasharray="3 3" stroke="#eee" vertical={false} />
+            <XAxis dataKey="name" tick={{ fontSize: 13 }} />
+            <YAxis tickFormatter={(v) => `$${v/1000}k`} tick={{ fontSize: 12 }} />
+            <Tooltip formatter={(v: any) => fmt(Number(v))} />
+            <Legend />
+            <Bar dataKey="Income" fill="#1f7a52" radius={[6,6,0,0]} />
+            <Bar dataKey="Expense" fill="#2563eb" radius={[6,6,0,0]} />
+          </BarChart>
+        </ResponsiveContainer>
+      </Panel>
+    </div>
+  );
+}
+
+function DonutChart({ data }: { data: any[] }) {
+  if (!data.length || data.every((d) => !d.value)) return <div className="empty">No data yet</div>;
+  return (
+    <ResponsiveContainer width="100%" height={240}>
+      <PieChart>
+        <Pie data={data} dataKey="value" nameKey="name" innerRadius={55} outerRadius={90} paddingAngle={2}>
+          {data.map((d, i) => <Cell key={i} fill={d.color} />)}
+        </Pie>
+        <Tooltip formatter={(v) => fmt(Number(v))} />
+        <Legend />
+      </PieChart>
+    </ResponsiveContainer>
+  );
+}
+
+/* ============================ CLIENTS ============================ */
+function Clients({ db, commit, scope, canEdit }: { db: any; commit: (next: any) => void; scope: string; canEdit: boolean }) {
+  const [q, setQ] = useState("");
+  const [open, setOpen] = useState(false);
+  const [editing, setEditing] = useState<any>(null);
+
+  const rows = db.clients
+    .filter((c: any) => scope === "all" || c.company === scope)
+    .filter((c: any) => [c.name, c.email, c.companyName, c.abn].join(" ").toLowerCase().includes(q.toLowerCase()));
+
+  const save = (c: any) => {
+    const next = { ...db };
+    if (c.id) next.clients = db.clients.map((x: any) => (x.id === c.id ? c : x));
+    else next.clients = [...db.clients, { ...c, id: uid() }];
+    commit(next); setOpen(false); setEditing(null);
+  };
+  const remove = (id: string) => commit({ ...db, clients: db.clients.filter((c: any) => c.id !== id) });
+
+  return (
+    <div className="stack">
+      <Toolbar q={q} setQ={setQ} placeholder="Search name, ABN, company…"
+        action={canEdit && <button className="btn primary" onClick={() => { setEditing(null); setOpen(true); }}><Plus size={16}/> New Client</button>} />
+      <div className="table-wrap">
+        <table>
+          <thead><tr><th>Name</th><th>Company</th><th>Email</th><th>Phone</th><th>ABN</th><th>Entity</th>{canEdit && <th></th>}</tr></thead>
+          <tbody>
+            {rows.map((c: any) => (
+              <tr key={c.id}>
+                <td className="strong">{c.name}<div className="muted-sm">{c.address}</div></td>
+                <td>{c.companyName}</td><td>{c.email}</td><td>{c.phone}</td><td>{c.abn}</td>
+                <td><Tag>{c.company === "mortgage" ? "Mortgage" : "Outsource"}</Tag></td>
+                {canEdit && <td className="row-actions">
+                  <button onClick={() => { setEditing(c); setOpen(true); }}><Pencil size={15}/></button>
+                  <button onClick={() => remove(c.id)}><Trash2 size={15}/></button>
+                </td>}
+              </tr>
+            ))}
+            {!rows.length && <tr><td colSpan={7} className="empty">No clients found</td></tr>}
+          </tbody>
+        </table>
+      </div>
+      {open && <ClientModal client={editing} onSave={save} onClose={() => setOpen(false)} />}
+    </div>
+  );
+}
+
+function ClientModal({ client, onSave, onClose }: { client: any; onSave: (c: any) => void; onClose: () => void }) {
+  const [f, setF] = useState(client || { name: "", email: "", phone: "", companyName: "", address: "", abn: "", company: "mortgage" });
+  const set = (k: string) => (e: any) => setF({ ...f, [k]: e.target.value });
+  return (
+    <Modal title={client ? "Edit Client" : "New Client"} onClose={onClose}>
+      <div className="form-grid">
+        <Field label="Full Name"><input value={f.name} onChange={set("name")} /></Field>
+        <Field label="Email"><input value={f.email} onChange={set("email")} /></Field>
+        <Field label="Phone"><input value={f.phone} onChange={set("phone")} /></Field>
+        <Field label="Company Name"><input value={f.companyName} onChange={set("companyName")} /></Field>
+        <Field label="ABN Number"><input value={f.abn} onChange={set("abn")} /></Field>
+        <Field label="Belongs To Entity">
+          <select value={f.company} onChange={set("company")}>
+            <option value="mortgage">Ezy Mortgage Australia</option>
+            <option value="outsource">Ezy Outsource</option>
+          </select>
+        </Field>
+        <Field label="Address" wide><input value={f.address} onChange={set("address")} /></Field>
+      </div>
+      <div className="modal-foot">
+        <button className="btn" onClick={onClose}>Cancel</button>
+        <button className="btn primary" disabled={!f.name} onClick={() => onSave(f)}>Save Client</button>
+      </div>
+    </Modal>
+  );
+}
+
+/* ============================ INCOME ============================ */
+function Income({ db, commit, scope, canEdit }: { db: any; commit: (next: any) => void; scope: string; canEdit: boolean }) {
+  const [open, setOpen] = useState(false);
+  const [q, setQ] = useState("");
+  const [cat, setCat] = useState("all");
+  const [svc, setSvc] = useState("all");
+  const clientName = (id: string) => db.clients.find((c: any) => c.id === id)?.name || "—";
+
+  const rows = db.income
+    .filter((i: any) => scope === "all" || i.company === scope)
+    .filter((i: any) => cat === "all" || i.category === cat)
+    .filter((i: any) => svc === "all" || i.service === svc)
+    .filter((i: any) => clientName(i.clientId).toLowerCase().includes(q.toLowerCase()));
+
+  const total = rows.reduce((s: number, i: any) => s + i.amount, 0);
+  const paid = rows.filter((i: any) => i.status === "paid").reduce((s: number, i: any) => s + i.amount, 0);
+
+  const save = (rec: any) => { commit({ ...db, income: [...db.income, { ...rec, id: uid() }] }); setOpen(false); };
+  const toggle = (id: string) => commit({ ...db, income: db.income.map((i: any) => i.id === id ? { ...i, status: i.status === "paid" ? "unpaid" : "paid" } : i) });
+  const remove = (id: string) => commit({ ...db, income: db.income.filter((i: any) => i.id !== id) });
+
+  return (
+    <div className="stack">
+      <div className="cards">
+        <Stat label="Filtered Income" value={fmt(total)} tone="green" />
+        <Stat label="Received" value={fmt(paid)} tone="green2" />
+        <Stat label="Outstanding" value={fmt(total - paid)} tone="amber" />
+      </div>
+      <Toolbar q={q} setQ={setQ} placeholder="Search by client…"
+        filters={<>
+          <select value={cat} onChange={(e) => setCat(e.target.value)}>
+            <option value="all">All categories</option>{INCOME_CATEGORIES.map((c) => <option key={c}>{c}</option>)}
+          </select>
+          <select value={svc} onChange={(e) => setSvc(e.target.value)}>
+            <option value="all">All services</option>{SERVICES.map((s) => <option key={s}>{s}</option>)}
+          </select>
+        </>}
+        action={canEdit && <button className="btn primary" onClick={() => setOpen(true)}><Plus size={16}/> New Income</button>} />
+      <div className="table-wrap">
+        <table>
+          <thead><tr><th>Date</th><th>Client</th><th>Category</th><th>Service</th><th>Entity</th><th className="r">Amount</th><th>Status</th>{canEdit && <th></th>}</tr></thead>
+          <tbody>
+            {rows.map((i: any) => (
+              <tr key={i.id}>
+                <td>{i.date}</td><td className="strong">{clientName(i.clientId)}</td>
+                <td>{i.category}</td><td>{i.service}</td>
+                <td><Tag>{i.company === "mortgage" ? "Mortgage" : "Outsource"}</Tag></td>
+                <td className="r strong">{fmt2(i.amount)}</td>
+                <td><button className={`status ${i.status}`} disabled={!canEdit} onClick={() => toggle(i.id)}>{i.status === "paid" ? "Paid" : "Unpaid"}</button></td>
+                {canEdit && <td className="row-actions"><button onClick={() => remove(i.id)}><Trash2 size={15}/></button></td>}
+              </tr>
+            ))}
+            {!rows.length && <tr><td colSpan={8} className="empty">No income records</td></tr>}
+          </tbody>
+        </table>
+      </div>
+      {open && <IncomeModal db={db} onSave={save} onClose={() => setOpen(false)} />}
+    </div>
+  );
+}
+
+function IncomeModal({ db, onSave, onClose }: { db: any; onSave: (rec: any) => void; onClose: () => void }) {
+  const [f, setF] = useState({ clientId: db.clients[0]?.id || "", company: "mortgage", category: INCOME_CATEGORIES[0], service: SERVICES[0], amount: "", date: new Date().toISOString().slice(0,10), status: "unpaid", note: "" });
+  const set = (k: string) => (e: any) => setF({ ...f, [k]: e.target.value });
+  return (
+    <Modal title="New Income" onClose={onClose}>
+      <div className="form-grid">
+        <Field label="Client"><select value={f.clientId} onChange={set("clientId")}>{db.clients.map((c: any) => <option key={c.id} value={c.id}>{c.name}</option>)}</select></Field>
+        <Field label="Entity"><select value={f.company} onChange={set("company")}><option value="mortgage">Ezy Mortgage</option><option value="outsource">Ezy Outsource</option></select></Field>
+        <Field label="Category"><select value={f.category} onChange={set("category")}>{INCOME_CATEGORIES.map((c) => <option key={c}>{c}</option>)}</select></Field>
+        <Field label="Service"><select value={f.service} onChange={set("service")}>{SERVICES.map((s) => <option key={s}>{s}</option>)}</select></Field>
+        <Field label="Amount (AUD)"><input type="number" value={f.amount} onChange={set("amount")} /></Field>
+        <Field label="Date"><input type="date" value={f.date} onChange={set("date")} /></Field>
+        <Field label="Status"><select value={f.status} onChange={set("status")}><option value="unpaid">Unpaid</option><option value="paid">Paid</option></select></Field>
+        <Field label="Note" wide><input value={f.note} onChange={set("note")} /></Field>
+      </div>
+      <div className="modal-foot">
+        <button className="btn" onClick={onClose}>Cancel</button>
+        <button className="btn primary" disabled={!f.amount} onClick={() => onSave({ ...f, amount: Number(f.amount) })}>Add Income</button>
+      </div>
+    </Modal>
+  );
+}
+
+/* ============================ EXPENSE ============================ */
+function Expense({ db, commit, scope, canEdit }: { db: any; commit: (next: any) => void; scope: string; canEdit: boolean }) {
+  const [open, setOpen] = useState(false);
+  const [cat, setCat] = useState("all");
+  const rows = db.expenses
+    .filter((e: any) => scope === "all" || e.company === scope)
+    .filter((e: any) => cat === "all" || e.category === cat);
+  const total = rows.reduce((s: number, e: any) => s + e.amount, 0);
+  const salary = rows.filter((e: any) => e.category === "Salary Expense").reduce((s: number, e: any) => s + e.amount, 0);
+
+  const save = (rec: any) => { commit({ ...db, expenses: [...db.expenses, { ...rec, id: uid() }] }); setOpen(false); };
+  const remove = (id: string) => commit({ ...db, expenses: db.expenses.filter((e: any) => e.id !== id) });
+
+  return (
+    <div className="stack">
+      <div className="cards">
+        <Stat label="Total Expense" value={fmt(total)} tone="blue" />
+        <Stat label="Salary Expense" value={fmt(salary)} tone="purple" sub="sub-category" />
+        <Stat label="Operating (non-salary)" value={fmt(total - salary)} tone="slate" />
+      </div>
+      <Toolbar
+        filters={<select value={cat} onChange={(e) => setCat(e.target.value)}><option value="all">All categories</option>{EXPENSE_CATEGORIES.map((c) => <option key={c}>{c}</option>)}</select>}
+        action={canEdit && <button className="btn primary" onClick={() => setOpen(true)}><Plus size={16}/> New Expense</button>} />
+      <div className="table-wrap">
+        <table>
+          <thead><tr><th>Date</th><th>Category</th><th>Detail / Sub-category</th><th>Entity</th><th className="r">Amount</th>{canEdit && <th></th>}</tr></thead>
+          <tbody>
+            {rows.map((e: any) => (
+              <tr key={e.id}>
+                <td>{e.date}</td>
+                <td>{e.category === "Salary Expense" ? <Tag tone="purple">Salary</Tag> : e.category}</td>
+                <td className="strong">{e.sub}<div className="muted-sm">{e.note}</div></td>
+                <td><Tag>{e.company === "mortgage" ? "Mortgage" : "Outsource"}</Tag></td>
+                <td className="r strong">{fmt2(e.amount)}</td>
+                {canEdit && <td className="row-actions"><button onClick={() => remove(e.id)}><Trash2 size={15}/></button></td>}
+              </tr>
+            ))}
+            {!rows.length && <tr><td colSpan={6} className="empty">No expenses</td></tr>}
+          </tbody>
+        </table>
+      </div>
+      {open && <ExpenseModal onSave={save} onClose={() => setOpen(false)} />}
+    </div>
+  );
+}
+
+function ExpenseModal({ onSave, onClose }: { onSave: (rec: any) => void; onClose: () => void }) {
+  const [f, setF] = useState({ company: "mortgage", category: EXPENSE_CATEGORIES[0], sub: "", amount: "", date: new Date().toISOString().slice(0,10), note: "" });
+  const set = (k: string) => (e: any) => setF({ ...f, [k]: e.target.value });
+  const isSalary = f.category === "Salary Expense";
+  return (
+    <Modal title="New Expense" onClose={onClose}>
+      <div className="form-grid">
+        <Field label="Entity"><select value={f.company} onChange={set("company")}><option value="mortgage">Ezy Mortgage</option><option value="outsource">Ezy Outsource</option></select></Field>
+        <Field label="Category"><select value={f.category} onChange={set("category")}>{EXPENSE_CATEGORIES.map((c) => <option key={c}>{c}</option>)}</select></Field>
+        <Field label={isSalary ? "Employee / Team (sub-category)" : "Detail / Sub-category"}><input value={f.sub} onChange={set("sub")} placeholder={isSalary ? "e.g. Sarah Lin" : "e.g. Rent, Xero"} /></Field>
+        <Field label="Amount (AUD)"><input type="number" value={f.amount} onChange={set("amount")} /></Field>
+        <Field label="Date"><input type="date" value={f.date} onChange={set("date")} /></Field>
+        <Field label="Note" wide><input value={f.note} onChange={set("note")} /></Field>
+      </div>
+      <div className="modal-foot">
+        <button className="btn" onClick={onClose}>Cancel</button>
+        <button className="btn primary" disabled={!f.amount || !f.sub} onClick={() => onSave({ ...f, amount: Number(f.amount) })}>Add Expense</button>
+      </div>
+    </Modal>
+  );
+}
+
+/* ============================ INVOICES ============================ */
+function Invoices({ db, commit, scope, canEdit }: { db: any; commit: (next: any) => void; scope: string; canEdit: boolean }) {
+  const [open, setOpen] = useState(false);
+  const [preview, setPreview] = useState<any>(null);
+  const client = (id: string) => db.clients.find((c: any) => c.id === id);
+  const rows = db.invoices.filter((i: any) => scope === "all" || i.company === scope);
+
+  const save = (inv: any) => {
+    const number = "INV-" + (1000 + db.invoices.length + 1);
+    commit({ ...db, invoices: [...db.invoices, { ...inv, id: uid(), number, status: "sent" }] });
+    setOpen(false);
+  };
+  const setStatus = (id: string, status: string) => commit({ ...db, invoices: db.invoices.map((i: any) => i.id === id ? { ...i, status } : i) });
+
+  return (
+    <div className="stack">
+      <div className="automation-note">
+        <Clock size={18} />
+        <div>
+          <strong>Automation (built in production):</strong> on the 1st of each month invoices auto-email to the client, payment auto-marks the invoice paid, and an unpaid invoice triggers a reminder after 14 days — repeating until paid. In this prototype you can preview the email template and run the steps manually below.
+        </div>
+      </div>
+      <Toolbar action={canEdit && <button className="btn primary" onClick={() => setOpen(true)}><Plus size={16}/> Create Invoice</button>} />
+      <div className="table-wrap">
+        <table>
+          <thead><tr><th>Invoice #</th><th>Client</th><th>Entity</th><th>Issued</th><th>Due</th><th className="r">Total (inc GST)</th><th>Status</th><th></th></tr></thead>
+          <tbody>
+            {rows.map((inv: any) => {
+              const sub = invTotal(inv); const total = sub + gstOf(sub);
+              return (
+                <tr key={inv.id}>
+                  <td className="strong">{inv.number}</td>
+                  <td>{client(inv.clientId)?.name}</td>
+                  <td><Tag>{inv.company === "mortgage" ? "Mortgage" : "Outsource"}</Tag></td>
+                  <td>{inv.issueDate}</td><td>{inv.dueDate}</td>
+                  <td className="r strong">{fmt2(total)}</td>
+                  <td><InvStatus status={inv.status} /></td>
+                  <td className="row-actions">
+                    <button onClick={() => setPreview(inv)} title="View / Email template"><Mail size={15}/></button>
+                    {canEdit && inv.status !== "paid" && <button onClick={() => setStatus(inv.id, "paid")} title="Mark paid"><CheckCircle2 size={15}/></button>}
+                  </td>
+                </tr>
+              );
+            })}
+            {!rows.length && <tr><td colSpan={8} className="empty">No invoices</td></tr>}
+          </tbody>
+        </table>
+      </div>
+      {open && <InvoiceModal db={db} onSave={save} onClose={() => setOpen(false)} />}
+      {preview && <InvoicePreview inv={preview} client={client(preview.clientId)} onClose={() => setPreview(null)} />}
+    </div>
+  );
+}
+
+function InvStatus({ status }: { status: string }) {
+  const map: Record<string, [string, string, React.ComponentType<any>]> = { paid: ["Paid", "green", CheckCircle2], sent: ["Sent", "amber", Send], overdue: ["Overdue", "red", AlertTriangle], draft: ["Draft", "slate", Clock] };
+  const [label, tone, Icon] = map[status] || map.draft;
+  return <span className={`inv-status ${tone}`}><Icon size={13}/> {label}</span>;
+}
+
+function InvoiceModal({ db, onSave, onClose }: { db: any; onSave: (inv: any) => void; onClose: () => void }) {
+  const [f, setF] = useState<any>({
+    clientId: db.clients[0]?.id || "", company: "mortgage",
+    issueDate: new Date().toISOString().slice(0,10),
+    dueDate: new Date(Date.now() + 14*864e5).toISOString().slice(0,10),
+    items: [{ desc: "", qty: 1, price: "" }],
+  });
+  const setItem = (idx: number, k: string, v: any) => setF({ ...f, items: f.items.map((it: any, i: number) => i === idx ? { ...it, [k]: v } : it) });
+  const addItem = () => setF({ ...f, items: [...f.items, { desc: "", qty: 1, price: "" }] });
+  const sub = f.items.reduce((s: number, it: any) => s + (Number(it.qty)||0) * (Number(it.price)||0), 0);
+
+  return (
+    <Modal title="Create Invoice" onClose={onClose} wide>
+      <div className="form-grid">
+        <Field label="Client"><select value={f.clientId} onChange={(e) => setF({...f, clientId: e.target.value})}>{db.clients.map((c: any) => <option key={c.id} value={c.id}>{c.name}</option>)}</select></Field>
+        <Field label="Entity"><select value={f.company} onChange={(e) => setF({...f, company: e.target.value})}><option value="mortgage">Ezy Mortgage</option><option value="outsource">Ezy Outsource</option></select></Field>
+        <Field label="Issue Date"><input type="date" value={f.issueDate} onChange={(e) => setF({...f, issueDate: e.target.value})} /></Field>
+        <Field label="Due Date"><input type="date" value={f.dueDate} onChange={(e) => setF({...f, dueDate: e.target.value})} /></Field>
+      </div>
+      <div className="line-items">
+        <div className="li-head"><span>Description</span><span>Qty</span><span>Unit Price</span><span>Amount</span></div>
+        {f.items.map((it: any, i: number) => (
+          <div className="li-row" key={i}>
+            <input value={it.desc} onChange={(e) => setItem(i, "desc", e.target.value)} placeholder="Service description" />
+            <input type="number" value={it.qty} onChange={(e) => setItem(i, "qty", e.target.value)} />
+            <input type="number" value={it.price} onChange={(e) => setItem(i, "price", e.target.value)} placeholder="0" />
+            <span className="li-amt">{fmt2((Number(it.qty)||0)*(Number(it.price)||0))}</span>
+          </div>
+        ))}
+        <button className="btn ghost sm" onClick={addItem}><Plus size={14}/> Add line</button>
+      </div>
+      <div className="totals">
+        <div><span>Subtotal</span><b>{fmt2(sub)}</b></div>
+        <div><span>GST (10%)</span><b>{fmt2(gstOf(sub))}</b></div>
+        <div className="grand"><span>Total</span><b>{fmt2(sub + gstOf(sub))}</b></div>
+      </div>
+      <div className="modal-foot">
+        <button className="btn" onClick={onClose}>Cancel</button>
+        <button className="btn primary" disabled={!sub} onClick={() => onSave({ ...f, items: f.items.map((it: any) => ({ ...it, qty: Number(it.qty), price: Number(it.price) })) })}><Send size={15}/> Create & Send</button>
+      </div>
+    </Modal>
+  );
+}
+
+function InvoicePreview({ inv, client, onClose }: { inv: any; client: any; onClose: () => void }) {
+  const sub = invTotal(inv); const gst = gstOf(sub); const total = sub + gst;
+  const entity = COMPANIES[inv.company as keyof typeof COMPANIES];
+  return (
+    <Modal title={`Email Template · ${inv.number}`} onClose={onClose} wide>
+      <div className="email-preview">
+        <div className="email-bar">To: {client?.email} &nbsp;·&nbsp; Subject: {inv.number} from {entity}</div>
+        <div className="invoice-doc">
+          <div className="inv-top">
+            <div className="inv-logo">EZY</div>
+            <div className="inv-co">
+              <div className="inv-co-name">{entity}</div>
+              <div className="muted-sm">ABN 00 000 000 000 · Sydney, Australia</div>
+            </div>
+            <div className="inv-meta">
+              <div className="inv-tax">TAX INVOICE</div>
+              <div className="muted-sm">{inv.number}</div>
+            </div>
+          </div>
+          <div className="inv-bill">
+            <div><div className="lbl">Bill To</div><b>{client?.name}</b><div className="muted-sm">{client?.companyName}<br/>{client?.address}<br/>ABN {client?.abn}</div></div>
+            <div className="r"><div className="lbl">Issued</div>{inv.issueDate}<div className="lbl" style={{marginTop:8}}>Due</div>{inv.dueDate}</div>
+          </div>
+          <table className="inv-table">
+            <thead><tr><th>Description</th><th className="r">Qty</th><th className="r">Unit</th><th className="r">Amount</th></tr></thead>
+            <tbody>{inv.items.map((it: any, i: number) => <tr key={i}><td>{it.desc}</td><td className="r">{it.qty}</td><td className="r">{fmt2(it.price)}</td><td className="r">{fmt2(it.qty*it.price)}</td></tr>)}</tbody>
+          </table>
+          <div className="inv-totals">
+            <div><span>Subtotal</span><span>{fmt2(sub)}</span></div>
+            <div><span>GST 10%</span><span>{fmt2(gst)}</span></div>
+            <div className="grand"><span>Total Due</span><span>{fmt2(total)}</span></div>
+          </div>
+          <div className="inv-pay">
+            <div className="lbl">Payment — Direct Deposit</div>
+            <div className="pay-grid">
+              {BANK_ACCOUNTS.map((b, i) => (
+                <div key={i} className="pay-acc">
+                  <b>{b.label}</b>
+                  <div>{b.name}</div>
+                  <div>BSB: {b.bsb}</div>
+                  <div>Acc: {b.acc}</div>
+                </div>
+              ))}
+            </div>
+          </div>
+          <div className="inv-foot">Thank you for your business. Please pay by the due date. — {entity}</div>
+        </div>
+      </div>
+      <div className="modal-foot">
+        <button className="btn" onClick={onClose}>Close</button>
+        <button className="btn primary"><Send size={15}/> Send Email (simulated)</button>
+      </div>
+    </Modal>
+  );
+}
+
+/* ============================ USER MANAGEMENT ============================ */
+function UsersMgmt({ db, commit, canEdit }: { db: any; commit: (next: any) => void; canEdit: boolean }) {
+  const [open, setOpen] = useState(false);
+  if (!canEdit) return <div className="locked"><Lock size={28}/><p>Only the CEO can manage users.</p></div>;
+  const save = (u: any) => { commit({ ...db, users: [...db.users, { ...u, id: uid() }] }); setOpen(false); };
+  const remove = (id: string) => commit({ ...db, users: db.users.filter((u: any) => u.id !== id) });
+
+  return (
+    <div className="stack">
+      <Toolbar action={<button className="btn primary" onClick={() => setOpen(true)}><Plus size={16}/> Create User</button>} />
+      <div className="user-grid">
+        {db.users.map((u: any) => (
+          <div className="user-card" key={u.id}>
+            <div className="user-head">
+              <div className="avatar">{u.name.split(" ").map((w: string)=>w[0]).slice(0,2).join("")}</div>
+              <div><div className="strong">{u.name}</div><div className="muted-sm">{u.email}</div></div>
+              <span className={`role-pill ${u.role.toLowerCase()}`}>{u.role}</span>
+            </div>
+            <div className="perm-list">
+              {SECTIONS.map((s) => (
+                <div className="perm-row" key={s}>
+                  <span>{NAV.find((n)=>n.key===s)?.label}</span>
+                  <span className={`perm-badge ${u.perms[s]}`}>{u.perms[s] === "edit" ? "Edit & Input" : u.perms[s] === "view" ? "View only" : "Hidden"}</span>
+                </div>
+              ))}
+            </div>
+            {u.role !== "CEO" && <button className="btn ghost sm full" onClick={() => remove(u.id)}><Trash2 size={14}/> Remove</button>}
+          </div>
+        ))}
+      </div>
+      {open && <UserModal onSave={save} onClose={() => setOpen(false)} />}
+    </div>
+  );
+}
+
+function UserModal({ onSave, onClose }: { onSave: (u: any) => void; onClose: () => void }) {
+  const [f, setF] = useState<any>({ name: "", email: "", role: "Staff", perms: { overview: "view", clients: "view", income: "view", expense: "view", invoices: "view", users: "none" } });
+  const setPerm = (s: string, v: string) => setF({ ...f, perms: { ...f.perms, [s]: v } });
+  return (
+    <Modal title="Create User & Set Permissions" onClose={onClose} wide>
+      <div className="form-grid">
+        <Field label="Full Name"><input value={f.name} onChange={(e) => setF({...f, name: e.target.value})} /></Field>
+        <Field label="Email"><input value={f.email} onChange={(e) => setF({...f, email: e.target.value})} /></Field>
+        <Field label="Role">
+          <select value={f.role} onChange={(e) => {
+            const role = e.target.value;
+            setF({ ...f, role, perms: role === "CEO" ? fullPerms() : f.perms });
+          }}>
+            <option>CEO</option><option>Manager</option><option>Staff</option>
+          </select>
+        </Field>
+      </div>
+      <div className="perm-editor">
+        <div className="perm-editor-head">Section access</div>
+        {SECTIONS.map((s) => (
+          <div className="perm-edit-row" key={s}>
+            <span>{NAV.find((n)=>n.key===s)?.label}</span>
+            <div className="seg">
+              {["none","view","edit"].map((opt) => (
+                <button key={opt} className={f.perms[s] === opt ? "on" : ""} disabled={f.role === "CEO"} onClick={() => setPerm(s, opt)}>
+                  {opt === "none" ? "Hidden" : opt === "view" ? "View" : "Edit"}
+                </button>
+              ))}
+            </div>
+          </div>
+        ))}
+        {f.role === "CEO" && <p className="muted-sm" style={{padding:"6px 14px"}}>CEO automatically has full access to everything.</p>}
+      </div>
+      <div className="modal-foot">
+        <button className="btn" onClick={onClose}>Cancel</button>
+        <button className="btn primary" disabled={!f.name} onClick={() => onSave(f)}>Create User</button>
+      </div>
+    </Modal>
+  );
+}
+
+/* ============================ SHARED UI ============================ */
+const Splash = () => <div className="splash"><Styles /><div className="logo big">EZY</div><p>Loading console…</p></div>;
+
+function Stat({ label, value, sub, tone = "slate", wide }: { label: string; value: string; sub?: string; tone?: string; wide?: boolean }) {
+  return (
+    <div className={`stat ${tone} ${wide ? "wide" : ""}`}>
+      <div className="stat-label">{label}</div>
+      <div className="stat-value">{value}</div>
+      {sub && <div className="stat-sub">{sub}</div>}
+    </div>
+  );
+}
+
+function Panel({ title, children }: { title: string; children: React.ReactNode }) { return <div className="panel"><div className="panel-title">{title}</div>{children}</div>; }
+function Tag({ children, tone }: { children: React.ReactNode; tone?: string }) { return <span className={`tag ${tone || ""}`}>{children}</span>; }
+function Toolbar({ q, setQ, placeholder, filters, action }: { q?: string; setQ?: (v: string) => void; placeholder?: string; filters?: React.ReactNode; action?: React.ReactNode }) {
+  return (
+    <div className="toolbar">
+      <div className="toolbar-left">
+        {setQ && <div className="search"><Search size={16} /><input value={q} onChange={(e) => setQ(e.target.value)} placeholder={placeholder} /></div>}
+        {filters}
+      </div>
+      {action}
+    </div>
+  );
+}
+function Field({ label, children, wide }: { label: string; children: React.ReactNode; wide?: boolean }) { return <label className={`field ${wide ? "wide" : ""}`}><span>{label}</span>{children}</label>; }
+function Modal({ title, children, onClose, wide }: { title: string; children: React.ReactNode; onClose: () => void; wide?: boolean }) {
+  return (
+    <div className="overlay" onClick={onClose}>
+      <div className={`modal ${wide ? "wide" : ""}`} onClick={(e) => e.stopPropagation()}>
+        <div className="modal-head"><h3>{title}</h3><button onClick={onClose}><X size={18} /></button></div>
+        <div className="modal-body">{children}</div>
+      </div>
+    </div>
+  );
+}
+
+/* ============================ STYLES ============================ */
+function Styles() {
+  return <style>{`
+  @import url('https://fonts.googleapis.com/css2?family=Fraunces:opsz,wght@9..144,500;9..144,600&family=Hanken+Grotesk:wght@400;500;600;700&display=swap');
+  * { box-sizing: border-box; }
+  .ezy-root, .splash { font-family: 'Hanken Grotesk', sans-serif; color: #1a1d21; }
+  .ezy-root { display: flex; min-height: 100vh; background: #f6f4f0; }
+  .splash { display:flex; flex-direction:column; align-items:center; justify-content:center; min-height:100vh; gap:14px; color:#6b7280; }
+
+  /* Admin Panel Dark Mode overrides */
+  .dark .ezy-root { background: #0c1017; color: #f0f2f5; }
+  .dark .topbar { background: #111620; border-bottom: 1px solid #1e2633; color: #fff; }
+  .dark .topbar h1 { color: #fff; }
+  .dark .scope { background: #1a2332; }
+  .dark .scope button { color: #9aa4af; }
+  .dark .scope button.on { background: #1f7a52; color: #fff; }
+  .dark .user-switch { background: #111620; border-color: #1e2633; color: #f0f2f5; }
+  .dark .panel { background: #111620; border-color: #1e2633; color: #fff; }
+  .dark .stat { background: #111620; border-color: #1e2633; }
+  .dark .stat-value { color: #fff; }
+  .dark .stat-label { color: #9aa4af; }
+  .dark .stat-sub { color: #7c8794; }
+  .dark .toolbar-left select { background: #111620; border-color: #1e2633; color: #f0f2f5; }
+  .dark .search { background: #111620; border-color: #1e2633; }
+  .dark .search input { background: transparent; color: #fff; }
+  .dark .table-wrap { background: #111620; border-color: #1e2633; }
+  .dark table { background: #111620; }
+  .dark thead th { background: #151c28; border-bottom-color: #1e2633; color: #7c8794; }
+  .dark tbody td { border-bottom-color: #1e2633; color: #e2e8f0; }
+  .dark tbody tr:hover { background: #161f2e; }
+  .dark .muted-sm { color: #8a94a0; }
+  .dark .tag { background: #1e293b; color: #9aa4af; }
+  .dark .row-actions button { background: #1a2332; color: #9aa4af; }
+  .dark .row-actions button:hover { background: #232f44; color: #fff; }
+  .dark .automation-note { background: #1a2332; border-color: #232f44; color: #93c5fd; }
+  .dark .modal { background: #111620; color: #fff; border: 1px solid #1e2633; }
+  .dark .modal-head { border-bottom-color: #1e2633; }
+  .dark .modal-head button { background: #1a2332; color: #fff; }
+  .dark .field { color: #9aa4af; }
+  .dark .field input, .dark .field select { background: #151c28; border-color: #1e2633; color: #fff; }
+  .dark .field input:focus, .dark .field select:focus { border-color: #1f7a52; }
+  .dark .totals { border-top-color: #1e2633; }
+  .dark .totals div { color: #9aa4af; }
+  .dark .totals b { color: #fff; }
+  .dark .email-preview { border-color: #1e2633; }
+  .dark .email-bar { background: #151c28; border-bottom-color: #1e2633; color: #9aa4af; }
+  .dark .inv-pay { background: #151c28; }
+  .dark .pay-acc { color: #9aa4af; }
+  .dark .pay-acc b { color: #fff; }
+  .dark .user-card { background: #111620; border-color: #1e2633; color: #fff; }
+  .dark .perm-edit-row { border-top-color: #1e2633; }
+  .dark .perm-editor { border-color: #1e2633; }
+  .dark .perm-editor-head { background: #151c28; color: #9aa4af; }
+  .dark .seg { background: #151c28; }
+  .dark .seg button { color: #9aa4af; }
+  .dark .seg button.on { background: #1f7a52; color: #fff; }
+
+  /* sidebar */
+  .sidebar { width: 248px; background:#11161c; color:#cdd3da; display:flex; flex-direction:column; padding:22px 16px; position:sticky; top:0; height:100vh; }
+  .brand { display:flex; gap:12px; align-items:center; padding:0 6px 22px; }
+  .logo { width:42px; height:42px; border-radius:11px; background:linear-gradient(135deg,#1f7a52,#2bb673); color:#fff; font-weight:700; display:grid; place-items:center; letter-spacing:.5px; font-size:15px; }
+  .logo.big { width:64px; height:64px; font-size:22px; border-radius:16px; }
+  .brand-name { font-weight:700; color:#fff; letter-spacing:.5px; }
+  .brand-sub { font-size:12px; color:#7c8794; }
+  nav { display:flex; flex-direction:column; gap:3px; flex:1; }
+  .nav-item { display:flex; align-items:center; gap:11px; padding:11px 13px; border-radius:10px; background:none; border:none; color:#9aa4af; font-size:14.5px; font-family:inherit; cursor:pointer; text-align:left; transition:.15s; }
+  .nav-item:hover { background:#1a212a; color:#e8ecf0; }
+  .nav-item.active { background:#1f7a52; color:#fff; font-weight:600; }
+  .sidebar-foot { border-top:1px solid #232b34; padding-top:14px; }
+  .who-name { color:#fff; font-weight:600; font-size:14px; } .who-role { font-size:12px; color:#7c8794; }
+
+  /* main */
+  .main { flex:1; display:flex; flex-direction:column; min-width:0; }
+  .topbar { display:flex; justify-content:space-between; align-items:flex-end; padding:24px 32px; background:#fff; border-bottom:1px solid #eae6df; flex-wrap:wrap; gap:16px; }
+  .topbar h1 { margin:0; font-family:'Fraunces',serif; font-size:27px; font-weight:600; letter-spacing:-.3px; }
+  .crumb { margin:2px 0 0; color:#94a0ab; font-size:13px; }
+  .top-controls { display:flex; gap:12px; align-items:center; flex-wrap:wrap; }
+  .scope { display:flex; background:#f1efe9; border-radius:10px; padding:3px; }
+  .scope button { border:none; background:none; padding:7px 13px; border-radius:8px; font-family:inherit; font-size:13px; color:#6b7280; cursor:pointer; }
+  .scope button.on { background:#fff; color:#11161c; font-weight:600; box-shadow:0 1px 3px rgba(0,0,0,.08); }
+  .user-switch { padding:9px 12px; border:1px solid #e2ddd4; border-radius:9px; font-family:inherit; font-size:13px; background:#fff; color:#374151; }
+  .content { padding:28px 32px; }
+  .stack { display:flex; flex-direction:column; gap:20px; }
+
+  /* stats */
+  .cards { display:grid; grid-template-columns:repeat(auto-fit,minmax(190px,1fr)); gap:16px; }
+  .stat { background:#fff; border:1px solid #eae6df; border-radius:14px; padding:18px 20px; border-left:4px solid #94a0ab; }
+  .stat.green { border-left-color:#1f7a52; } .stat.green2 { border-left-color:#2bb673; }
+  .stat.amber { border-left-color:#d9930a; } .stat.blue { border-left-color:#2563eb; }
+  .stat.red { border-left-color:#dc2626; } .stat.purple { border-left-color:#9333ea; } .stat.slate { border-left-color:#64748b; }
+  .stat.wide { grid-column: span 2; }
+  .stat-label { font-size:13px; color:#8a94a0; font-weight:500; }
+  .stat-value { font-size:26px; font-weight:700; margin-top:5px; font-variant-numeric:tabular-nums; letter-spacing:-.5px; }
+  .stat-sub { font-size:12px; color:#a3acb6; margin-top:3px; }
+
+  /* panels & charts */
+  .chart-grid { display:grid; grid-template-columns:repeat(auto-fit,minmax(280px,1fr)); gap:18px; }
+  .panel { background:#fff; border:1px solid #eae6df; border-radius:16px; padding:20px; }
+  .panel-title { font-weight:600; font-size:15px; margin-bottom:12px; }
+  .empty { text-align:center; color:#a3acb6; padding:40px 0; font-size:14px; }
+
+  /* toolbar */
+  .toolbar { display:flex; justify-content:space-between; align-items:center; gap:14px; flex-wrap:wrap; }
+  .toolbar-left { display:flex; gap:10px; align-items:center; flex-wrap:wrap; }
+  .search { display:flex; align-items:center; gap:8px; background:#fff; border:1px solid #e2ddd4; border-radius:10px; padding:9px 13px; color:#9aa4af; }
+  .search input { border:none; outline:none; font-family:inherit; font-size:14px; width:230px; color:#1a1d21; }
+  .toolbar-left select { padding:9px 12px; border:1px solid #e2ddd4; border-radius:10px; font-family:inherit; font-size:14px; background:#fff; color:#374151; }
+
+  /* buttons */
+  .btn { display:inline-flex; align-items:center; gap:7px; padding:10px 16px; border-radius:10px; border:1px solid #e2ddd4; background:#fff; font-family:inherit; font-size:14px; font-weight:500; cursor:pointer; color:#374151; transition:.15s; }
+  .btn:hover { background:#f7f5f1; } .btn:disabled { opacity:.45; cursor:not-allowed; }
+  .btn.primary { background:#1f7a52; border-color:#1f7a52; color:#fff; } .btn.primary:hover { background:#1a6645; }
+  .btn.ghost { background:none; border:1px dashed #cfc8bc; color:#6b7280; } .btn.sm { padding:7px 12px; font-size:13px; } .btn.full { width:100%; justify-content:center; }
+
+  /* tables */
+  .table-wrap { background:#fff; border:1px solid #eae6df; border-radius:14px; overflow:hidden; }
+  table { width:100%; border-collapse:collapse; }
+  thead th { text-align:left; font-size:12px; text-transform:uppercase; letter-spacing:.5px; color:#9aa4af; padding:13px 18px; background:#faf8f4; border-bottom:1px solid #eee; }
+  tbody td { padding:14px 18px; border-bottom:1px solid #f2efe9; font-size:14px; vertical-align:top; }
+  tbody tr:last-child td { border-bottom:none; }
+  tbody tr:hover { background:#fcfbf8; }
+  .strong { font-weight:600; } .r { text-align:right; } th.r { text-align:right; }
+  .muted-sm { color:#a3acb6; font-size:12.5px; margin-top:2px; }
+  .row-actions { display:flex; gap:6px; justify-content:flex-end; }
+  .row-actions button { border:none; background:#f3f1ec; width:30px; height:30px; border-radius:8px; cursor:pointer; color:#6b7280; display:grid; place-items:center; }
+  .row-actions button:hover { background:#e9e5dd; color:#11161c; }
+  .tag { background:#eef2f4; color:#516170; font-size:12px; padding:3px 9px; border-radius:20px; font-weight:500; }
+  .tag.purple { background:#f3e8ff; color:#7e22ce; }
+  .status { border:none; padding:4px 12px; border-radius:20px; font-size:12.5px; font-weight:600; cursor:pointer; font-family:inherit; }
+  .status.paid { background:#dcf3e8; color:#1f7a52; } .status.unpaid { background:#fdeccd; color:#a8690a; }
+
+  /* invoices */
+  .automation-note { display:flex; gap:12px; background:#eef6ff; border:1px solid #cfe2fb; color:#1f4e79; padding:14px 16px; border-radius:12px; font-size:13.5px; align-items:flex-start; }
+  .automation-note svg { flex-shrink:0; margin-top:1px; }
+  .inv-status { display:inline-flex; align-items:center; gap:5px; font-size:12.5px; font-weight:600; padding:4px 10px; border-radius:20px; }
+  .inv-status.green { background:#dcf3e8; color:#1f7a52; } .inv-status.amber { background:#fdeccd; color:#a8690a; }
+  .inv-status.red { background:#fde2e1; color:#c0392b; } .inv-status.slate { background:#eef0f2; color:#64748b; }
+
+  /* modal */
+  .overlay { position:fixed; inset:0; background:rgba(17,22,28,.5); display:grid; place-items:center; padding:20px; z-index:50; }
+  .modal { background:#fff; border-radius:18px; width:520px; max-width:100%; max-height:90vh; overflow:auto; }
+  .modal.wide { width:680px; }
+  .modal-head { display:flex; justify-content:space-between; align-items:center; padding:18px 22px; border-bottom:1px solid #eee; }
+  .modal-head h3 { margin:0; font-family:'Fraunces',serif; font-size:20px; }
+  .modal-head button { border:none; background:#f3f1ec; width:32px; height:32px; border-radius:8px; cursor:pointer; }
+  .modal-body { padding:22px; }
+  .modal-foot { display:flex; justify-content:flex-end; gap:10px; margin-top:18px; }
+  .form-grid { display:grid; grid-template-columns:1fr 1fr; gap:14px; }
+  .field { display:flex; flex-direction:column; gap:5px; font-size:13px; color:#6b7280; font-weight:500; }
+  .field.wide { grid-column:span 2; }
+  .field input, .field select { padding:10px 12px; border:1px solid #e2ddd4; border-radius:9px; font-family:inherit; font-size:14px; color:#1a1d21; }
+  .field input:focus, .field select:focus { outline:none; border-color:#1f7a52; }
+
+  /* line items */
+  .line-items { margin-top:18px; }
+  .li-head, .li-row { display:grid; grid-template-columns:3fr 1fr 1.4fr 1.4fr; gap:10px; align-items:center; }
+  .li-head { font-size:12px; color:#9aa4af; text-transform:uppercase; letter-spacing:.4px; margin-bottom:8px; }
+  .li-row { margin-bottom:8px; } .li-row input { padding:9px 11px; border:1px solid #e2ddd4; border-radius:8px; font-family:inherit; font-size:13.5px; }
+  .li-amt { text-align:right; font-weight:600; font-variant-numeric:tabular-nums; }
+  .totals { margin-top:16px; border-top:1px solid #eee; padding-top:14px; display:flex; flex-direction:column; gap:7px; align-items:flex-end; }
+  .totals div { display:flex; gap:40px; font-size:14px; color:#6b7280; } .totals b { color:#1a1d21; min-width:90px; text-align:right; }
+  .totals .grand { font-size:18px; } .totals .grand b { color:#1f7a52; }
+
+  /* email/invoice preview */
+  .email-preview { border:1px solid #eee; border-radius:12px; overflow:hidden; }
+  .email-bar { background:#faf8f4; padding:10px 16px; font-size:12.5px; color:#6b7280; border-bottom:1px solid #eee; }
+  .invoice-doc { padding:26px; }
+  .inv-top { display:flex; align-items:center; gap:14px; }
+  .inv-logo { width:50px; height:50px; border-radius:12px; background:linear-gradient(135deg,#1f7a52,#2bb673); color:#fff; font-weight:700; display:grid; place-items:center; }
+  .inv-co { flex:1; } .inv-co-name { font-weight:700; font-size:15px; }
+  .inv-meta { text-align:right; } .inv-tax { font-family:'Fraunces',serif; font-size:18px; color:#1f7a52; font-weight:600; }
+  .inv-bill { display:flex; justify-content:space-between; margin:22px 0; font-size:13.5px; }
+  .lbl { font-size:11px; text-transform:uppercase; letter-spacing:.5px; color:#9aa4af; margin-bottom:3px; }
+  .inv-table { margin:8px 0; } .inv-table th { background:#faf8f4; font-size:11px; }
+  .inv-totals { display:flex; flex-direction:column; gap:6px; align-items:flex-end; margin:14px 0; }
+  .inv-totals div { display:flex; gap:50px; font-size:13.5px; color:#6b7280; }
+  .inv-totals .grand { font-size:16px; font-weight:700; color:#1a1d21; border-top:2px solid #11161c; padding-top:7px; }
+  .inv-pay { background:#faf8f4; border-radius:10px; padding:14px 16px; margin-top:10px; }
+  .pay-grid { display:grid; grid-template-columns:1fr 1fr; gap:12px; margin-top:8px; }
+  .pay-acc { font-size:13px; color:#516170; } .pay-acc b { color:#1a1d21; display:block; margin-bottom:2px; }
+  .inv-foot { text-align:center; color:#9aa4af; font-size:12.5px; margin-top:18px; }
+
+  /* users */
+  .user-grid { display:grid; grid-template-columns:repeat(auto-fill,minmax(300px,1fr)); gap:18px; }
+  .user-card { background:#fff; border:1px solid #eae6df; border-radius:16px; padding:20px; }
+  .user-head { display:flex; align-items:center; gap:12px; margin-bottom:16px; }
+  .avatar { width:44px; height:44px; border-radius:12px; background:#11161c; color:#fff; display:grid; place-items:center; font-weight:600; font-size:15px; }
+  .role-pill { margin-left:auto; font-size:11.5px; font-weight:700; padding:4px 11px; border-radius:20px; text-transform:uppercase; letter-spacing:.4px; }
+  .role-pill.ceo { background:#1f7a52; color:#fff; } .role-pill.manager { background:#eef6ff; color:#1f4e79; } .role-pill.staff { background:#f3f1ec; color:#6b7280; }
+  .perm-list { display:flex; flex-direction:column; gap:6px; margin-bottom:14px; }
+  .perm-row { display:flex; justify-content:space-between; font-size:13px; color:#516170; }
+  .perm-badge { font-size:11.5px; font-weight:600; padding:2px 9px; border-radius:6px; }
+  .perm-badge.edit { background:#dcf3e8; color:#1f7a52; } .perm-badge.view { background:#eef6ff; color:#1f4e79; } .perm-badge.none { background:#f3f1ec; color:#a3acb6; }
+  .perm-editor { margin-top:18px; border:1px solid #eee; border-radius:12px; overflow:hidden; }
+  .perm-editor-head { background:#faf8f4; padding:11px 14px; font-size:12px; text-transform:uppercase; letter-spacing:.5px; color:#9aa4af; }
+  .perm-edit-row { display:flex; justify-content:space-between; align-items:center; padding:11px 14px; border-top:1px solid #f2efe9; font-size:14px; }
+  .seg { display:flex; background:#f1efe9; border-radius:8px; padding:2px; }
+  .seg button { border:none; background:none; padding:6px 13px; border-radius:6px; font-family:inherit; font-size:12.5px; color:#6b7280; cursor:pointer; }
+  .seg button.on { background:#fff; color:#11161c; font-weight:600; box-shadow:0 1px 2px rgba(0,0,0,.1); }
+  .seg button:disabled { opacity:.4; cursor:not-allowed; }
+  .locked { text-align:center; padding:70px 0; color:#a3acb6; } .locked p { margin-top:10px; }
+  @media (max-width:640px){ .sidebar{ display:none; } .form-grid{ grid-template-columns:1fr; } .field.wide{ grid-column:auto; } }
+  `}</style>;
 }
