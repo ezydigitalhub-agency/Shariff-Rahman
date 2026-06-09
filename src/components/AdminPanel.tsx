@@ -35,7 +35,7 @@ const BANK_ACCOUNTS = [
 const INCOME_CATEGORIES = ["Loan Settlement", "Brokerage Commission", "Outsourcing Fee", "Consulting", "Other"];
 const SERVICES = ["Home Loan", "Refinance", "Commercial Loan", "Back-office", "Lead Generation", "Accounting Support"];
 const EXPENSE_CATEGORIES = ["Office Operations", "Administration", "Subscription Purchase", "Salary Expense"];
-const SECTIONS = ["overview", "clients", "income", "expense", "invoices", "users", "xero_sales", "xero_invoices"];
+const SECTIONS = ["overview", "clients", "income", "expense", "invoices", "users"];
 
 /* ---------- seed data ---------- */
 const seed = () => ({
@@ -136,12 +136,13 @@ export default function AdminPanel({ onBackToHome, isDarkMode = false, onToggleT
     <div className="ezy-root">
       <Styles />
       <aside className="sidebar">
-        <div className="brand">
-          <div className="logo">EZY</div>
-          <div>
-            <div className="brand-name">EZY GROUP</div>
-            <div className="brand-sub">Business Console</div>
-          </div>
+        <div className="brand" style={{ display: "flex", justifyContent: "center", alignItems: "center", padding: "12px 0", borderBottom: "1px solid rgba(255,255,255,0.08)" }}>
+          <img
+            src="https://ezyhubltd.com/wp-content/uploads/2025/12/Linkdin-Profile@4x-100-scaled.jpg"
+            alt="Ezy Group Logo"
+            style={{ width: "42px", height: "42px", borderRadius: "50%", objectFit: "cover", border: "2px solid rgba(255,255,255,0.2)" }}
+            referrerPolicy="no-referrer"
+          />
         </div>
         <nav>
           {NAV.filter((n) => can(n.key)).map((n) => (
@@ -223,10 +224,8 @@ export default function AdminPanel({ onBackToHome, isDarkMode = false, onToggleT
           {activeSection === "clients" && <Clients db={db} commit={commit} scope={scope} canEdit={canEdit("clients")} />}
           {activeSection === "income" && <Income db={db} commit={commit} scope={scope} canEdit={canEdit("income")} />}
           {activeSection === "expense" && <Expense db={db} commit={commit} scope={scope} canEdit={canEdit("expense")} />}
-          {activeSection === "invoices" && <Invoices db={db} commit={commit} scope={scope} canEdit={canEdit("invoices")} />}
+          {activeSection === "invoices" && <Invoices db={db} commit={commit} scope={scope} canEdit={canEdit("invoices")} isDarkMode={isDarkMode} />}
           {activeSection === "users" && <UsersMgmt db={db} commit={commit} canEdit={canEdit("users")} />}
-          {activeSection === "xero_sales" && <XeroSales isDarkMode={isDarkMode} />}
-          {activeSection === "xero_invoices" && <XeroInvoices isDarkMode={isDarkMode} />}
         </div>
       </main>
     </div>
@@ -240,8 +239,6 @@ const NAV = [
   { key: "expense", label: "Expense", icon: Wallet },
   { key: "invoices", label: "Invoice System", icon: FileText },
   { key: "users", label: "User Management", icon: ShieldCheck },
-  { key: "xero_sales", label: "Xero Sales Overview (EDH)", icon: TrendingUp },
-  { key: "xero_invoices", label: "Xero Invoices Overview (EDH)", icon: FileText },
 ];
 
 /* ============================ OVERVIEW ============================ */
@@ -558,7 +555,8 @@ function ExpenseModal({ onSave, onClose }: { onSave: (rec: any) => void; onClose
 }
 
 /* ============================ INVOICES ============================ */
-function Invoices({ db, commit, scope, canEdit }: { db: any; commit: (next: any) => void; scope: string; canEdit: boolean }) {
+function Invoices({ db, commit, scope, canEdit, isDarkMode }: { db: any; commit: (next: any) => void; scope: string; canEdit: boolean; isDarkMode: boolean }) {
+  const [activeTab, setActiveTab] = useState<"internal" | "xero_sales" | "xero_invoices" | any>("internal");
   const [open, setOpen] = useState(false);
   const [preview, setPreview] = useState<any>(null);
   const client = (id: string) => db.clients.find((c: any) => c.id === id);
@@ -573,40 +571,91 @@ function Invoices({ db, commit, scope, canEdit }: { db: any; commit: (next: any)
 
   return (
     <div className="stack">
-      <div className="automation-note">
-        <Clock size={18} />
-        <div>
-          <strong>Automation (built in production):</strong> on the 1st of each month invoices auto-email to the client, payment auto-marks the invoice paid, and an unpaid invoice triggers a reminder after 14 days — repeating until paid. In this prototype you can preview the email template and run the steps manually below.
-        </div>
+      {/* Sub tabs for Invoice System */}
+      <div style={{
+        display: "flex",
+        gap: "10px",
+        marginBottom: "20px",
+        borderBottom: "1px solid rgba(0, 74, 153, 0.16)",
+        paddingBottom: "12px",
+        flexWrap: "wrap"
+      }}>
+        <button
+          onClick={() => setActiveTab("xero_sales")}
+          style={{
+            padding: "8px 16px",
+            borderRadius: "8px",
+            border: "1px solid",
+            background: activeTab === "xero_sales" ? "#ff6900" : "transparent",
+            color: activeTab === "xero_sales" ? "#ffffff" : (isDarkMode ? "#ffffff" : "#000000"),
+            borderColor: activeTab === "xero_sales" ? "#ff6900" : (isDarkMode ? "#1e2633" : "#cbd5e1"),
+            fontWeight: "600",
+            cursor: "pointer",
+            transition: "all 0.15s ease",
+          }}
+        >
+          Invoice Overview
+        </button>
+        <button
+          onClick={() => setActiveTab("internal")}
+          style={{
+            padding: "8px 16px",
+            borderRadius: "8px",
+            border: "1px solid",
+            background: activeTab === "internal" ? "#ff6900" : "transparent",
+            color: activeTab === "internal" ? "#ffffff" : (isDarkMode ? "#ffffff" : "#000000"),
+            borderColor: activeTab === "internal" ? "#ff6900" : (isDarkMode ? "#1e2633" : "#cbd5e1"),
+            fontWeight: "600",
+            cursor: "pointer",
+            transition: "all 0.15s ease",
+          }}
+        >
+          Invoices List
+        </button>
       </div>
-      <Toolbar action={canEdit && <button className="btn primary" onClick={() => setOpen(true)}><Plus size={16}/> Create Invoice</button>} />
-      <div className="table-wrap">
-        <table>
-          <thead><tr><th>Invoice #</th><th>Client</th><th>Entity</th><th>Issued</th><th>Due</th><th className="r">Total (inc GST)</th><th>Status</th><th></th></tr></thead>
-          <tbody>
-            {rows.map((inv: any) => {
-              const sub = invTotal(inv); const total = sub + gstOf(sub);
-              return (
-                <tr key={inv.id}>
-                  <td className="strong">{inv.number}</td>
-                  <td>{client(inv.clientId)?.name}</td>
-                  <td><Tag>{inv.company === "mortgage" ? "Mortgage" : "Outsource"}</Tag></td>
-                  <td>{inv.issueDate}</td><td>{inv.dueDate}</td>
-                  <td className="r strong">{fmt2(total)}</td>
-                  <td><InvStatus status={inv.status} /></td>
-                  <td className="row-actions">
-                    <button onClick={() => setPreview(inv)} title="View / Email template"><Mail size={15}/></button>
-                    {canEdit && inv.status !== "paid" && <button onClick={() => setStatus(inv.id, "paid")} title="Mark paid"><CheckCircle2 size={15}/></button>}
-                  </td>
-                </tr>
-              );
-            })}
-            {!rows.length && <tr><td colSpan={8} className="empty">No invoices</td></tr>}
-          </tbody>
-        </table>
-      </div>
-      {open && <InvoiceModal db={db} onSave={save} onClose={() => setOpen(false)} />}
-      {preview && <InvoicePreview inv={preview} client={client(preview.clientId)} onClose={() => setPreview(null)} />}
+
+      {activeTab === "internal" ? (
+        <>
+          <div className="automation-note">
+            <Clock size={18} />
+            <div>
+              <strong>Automation (built in production):</strong> on the 1st of each month invoices auto-email to the client, payment auto-marks the invoice paid, and an unpaid invoice triggers a reminder after 14 days — repeating until paid. In this prototype you can preview the email template and run the steps manually below.
+            </div>
+          </div>
+          <Toolbar action={canEdit && <button className="btn primary" onClick={() => setOpen(true)}><Plus size={16}/> Create Invoice</button>} />
+          <div className="table-wrap">
+            <table>
+              <thead><tr><th>Invoice #</th><th>Client</th><th>Entity</th><th>Issued</th><th>Due</th><th className="r">Total (inc GST)</th><th>Status</th><th></th></tr></thead>
+              <tbody>
+                {rows.map((inv: any) => {
+                  const sub = invTotal(inv); const total = sub + gstOf(sub);
+                  return (
+                    <tr key={inv.id}>
+                      <td className="strong">{inv.number}</td>
+                      <td>{client(inv.clientId)?.name}</td>
+                      <td><Tag>{inv.company === "mortgage" ? "Mortgage" : "Outsource"}</Tag></td>
+                      <td>{inv.issueDate}</td><td>{inv.dueDate}</td>
+                      <td className="r strong">{fmt2(total)}</td>
+                      <td><InvStatus status={inv.status} /></td>
+                      <td className="row-actions">
+                        <button onClick={() => setPreview(inv)} title="View / Email template"><Mail size={15}/></button>
+                        {canEdit && inv.status !== "paid" && <button onClick={() => setStatus(inv.id, "paid")} title="Mark paid"><CheckCircle2 size={15}/></button>}
+                      </td>
+                    </tr>
+                  );
+                })}
+                {!rows.length && <tr><td colSpan={8} className="empty">No invoices</td></tr>}
+              </tbody>
+            </table>
+          </div>
+          {open && <InvoiceModal db={db} onSave={save} onClose={() => setOpen(false)} />}
+          {preview && <InvoicePreview inv={preview} client={client(preview.clientId)} onClose={() => setPreview(null)} />}
+        </>
+      ) : activeTab === "xero_sales" ? (
+        <XeroSales isDarkMode={isDarkMode} />
+      ) : (
+        <XeroInvoices isDarkMode={isDarkMode} />
+      )}
     </div>
   );
 }
@@ -887,6 +936,14 @@ function Styles() {
   .dark .seg { background: #151c28; }
   .dark .seg button { color: #9aa4af; }
   .dark .seg button.on { background: #1f7a52; color: #fff; }
+
+  /* Admin Panel Button Dark Mode overrides */
+  .dark .btn { background: #151c28; border-color: #1e2633; color: #f0f2f5; }
+  .dark .btn:hover { background: #1f293d; color: #ffffff; }
+  .dark .btn.primary { background: #1f7a52; border-color: #1f7a52; color: #ffffff; }
+  .dark .btn.primary:hover { background: #1a6645; }
+  .dark .btn.ghost { background: none; border: 1px dashed #232f44; color: #9aa4af; }
+  .dark .btn.ghost:hover { border-color: #ff6900; color: #ff6900; }
 
   /* sidebar */
   .sidebar { width: 248px; background:#11161c; color:#cdd3da; display:flex; flex-direction:column; padding:22px 16px; position:sticky; top:0; height:100vh; }

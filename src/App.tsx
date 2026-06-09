@@ -143,7 +143,7 @@ export default function App() {
     }`}>
       
       {/* Dynamic Ambient Blur Background */}
-      <GlowBackground isDarkMode={isDarkMode} />
+      {!isLoading && <GlowBackground isDarkMode={isDarkMode} />}
 
       {/* Loader Sequence */}
       <AnimatePresence>
@@ -152,20 +152,25 @@ export default function App() {
             initial={{ opacity: 1 }}
             exit={{ opacity: 0 }}
             transition={{ duration: 0.4 }}
-            className="fixed inset-0 bg-black z-[100] flex flex-col items-center justify-center"
+            className="fixed inset-0 z-[100] flex flex-col items-center justify-center preloader"
+            style={{ backgroundColor: "#000000" }}
           >
             <div className="text-center space-y-4">
               <motion.h1 
                 animate={{ opacity: [0.5, 1, 0.5] }}
                 transition={{ duration: 1.5, repeat: Infinity, ease: "easeInOut" }}
-                className="text-2xl sm:text-3xl font-bold font-display tracking-[0.25em] text-white uppercase font-serif"
+                className="text-2xl sm:text-3xl font-bold font-display tracking-[0.25em] uppercase font-serif"
+                style={{ color: "#ffffff", backgroundColor: "transparent" }}
               >
                 SHARIFF RAHMAN
               </motion.h1>
-              <div className="text-[10px] uppercase font-mono tracking-widest text-zinc-500">
+              <div 
+                className="text-[10px] uppercase font-mono tracking-widest"
+                style={{ color: "#a1a1aa", backgroundColor: "transparent" }}
+              >
                 Lending Intelligence & Broker Support
               </div>
-              <div className="w-12 h-[1px] bg-blue-500 mx-auto mt-2" />
+              <div className="w-12 h-[1px] mx-auto mt-2" style={{ backgroundColor: "#3b82f6" }} />
             </div>
           </motion.div>
         )}

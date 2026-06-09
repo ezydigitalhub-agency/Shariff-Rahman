@@ -50,11 +50,22 @@
 body {
   overflow-x: hidden;
   background-color: #010816;
-  transition: background-color 0.3s ease;
 }
 
 html:not(.dark) body {
   background-color: #ffffff !important;
+}
+
+/* Ensure preloader always has black background and white text, completely overriding any theme files or class overrides */
+.preloader, .preloader * {
+  background-color: #000000 !important;
+  color: #ffffff !important;
+}
+.preloader div {
+  background-color: transparent !important;
+}
+.preloader div[style*="background-color: rgb(59, 130, 246)"] {
+  background-color: #3b82f6 !important;
 }
 
 /* Light Mode overrides for Home page */
@@ -197,3 +208,37 @@ html:not(.dark) ::-webkit-scrollbar-thumb {
 html:not(.dark) ::-webkit-scrollbar-thumb:hover {
   background: #ff6900; /* Pop with brand orange hover! */
 }
+
+/* Premium Button Hover Overlay Styles Patterned Off Ezy Group Color Theme */
+button:hover,
+a:hover:not(.no-underline) {
+  transition: all 0.25s cubic-bezier(0.4, 0, 0.2, 1) !important;
+}
+
+/* Primary Brand buttons hover state - bright glowing Ezy orange */
+.btn.primary:hover,
+button.primary:hover,
+button.bg-blue-600:hover,
+button.bg-\[\#ff6900\]:hover,
+a.bg-blue-600:hover,
+a.bg-\[\#ff6900\]:hover,
+[class*="bg-[#ff6900]"]:hover {
+  background-color: #ff5500 !important;
+  color: #ffffff !important;
+  box-shadow: 0 0 14px rgba(255, 105, 0, 0.5) !important;
+  transform: translateY(-1px);
+}
+
+/* Secondary outline/text buttons hover state */
+button:not(.primary):not(.bg-transparent):not(.bg-none):hover,
+.btn-secondary:hover {
+  border-color: #ff6900 !important;
+  color: #ff6900 !important;
+}
+
+/* Custom dark/light styling consistency for the nested invoice system sub-tabs */
+button[style*="background: rgb(255, 105, 0)"]:hover {
+  background-color: #ff5500 !important;
+  box-shadow: 0 0 10px rgba(255, 105, 0, 0.3) !important;
+}
+

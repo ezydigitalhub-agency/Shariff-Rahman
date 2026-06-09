@@ -62,11 +62,11 @@ export default function Header({ activeSection, onNavigate, isDarkMode = true, o
             onClick={(e) => handleNavClick(e, "hero")}
             className="flex items-center gap-3 group focus:outline-none focus:ring-2 focus:ring-blue-500/50 rounded-full pr-2"
           >
-            <div className={`relative overflow-hidden w-8 h-8 rounded-full border transition-all duration-300 ${
+            <div className={`relative overflow-hidden w-12 h-12 rounded-full border-2 transition-all duration-300 ${
               isDarkMode ? "border-white/20 group-hover:border-[#ff6900]" : "border-zinc-300 group-hover:border-[#ff6900]"
             }`}>
               <img
-                src="https://mortgagebrokerassist.com.au/wp-content/uploads/2026/02/Asset-203.webp"
+                src="https://ezyhubltd.com/wp-content/uploads/2025/12/Linkdin-Profile@4x-100-scaled.jpg"
                 alt="Shariff Rahman"
                 className="w-full h-full object-cover"
                 referrerPolicy="no-referrer"

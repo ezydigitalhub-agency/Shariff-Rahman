@@ -102,79 +102,9 @@ export default function XeroInvoices({ isDarkMode }: XeroInvoicesProps) {
   const hoverRowTheme = isDarkMode ? "hover:bg-[#151c28]/40" : "hover:bg-slate-50";
 
   return (
-    <div className={`w-full min-h-screen ${pageBg} font-sans pb-12 transition-colors duration-300`}>
-      {/* 1. Xero Top Navigation Bar */}
-      <header className={`${headerBg} border-b px-6 py-2.5 flex items-center justify-between shadow-sm text-sm`}>
-        <div className="flex items-center gap-6">
-          {/* Organization: EDH */}
-          <div className="relative">
-            <button
-              onClick={() => setShowOrgDropdown(!showOrgDropdown)}
-              className="flex items-center gap-2 hover:bg-slate-700/30 px-3 py-1.5 rounded text-white font-semibold cursor-pointer transition-colors"
-            >
-              <div className="bg-[#13b5ea] text-white text-[11px] font-bold h-5 w-5 rounded flex items-center justify-center shadow-sm">X</div>
-              <span>{selectedOrg}</span>
-              <ChevronDown size={14} className="opacity-80" />
-            </button>
-            {showOrgDropdown && (
-              <div className={`absolute left-0 mt-2 w-48 rounded-md shadow-lg z-50 overflow-hidden border ${isDarkMode ? "bg-[#151c28] border-zinc-800" : "bg-white border-zinc-200"}`}>
-                {orgs.map((o) => (
-                  <button
-                    key={o}
-                    onClick={() => { setSelectedOrg(o); setShowOrgDropdown(false); }}
-                    className={`w-full text-left px-4 py-2 hover:bg-[#13b5ea]/10 transition-colors ${o === selectedOrg ? "font-bold text-[#13b5ea]" : isDarkMode ? "text-gray-300" : "text-gray-700"}`}
-                  >
-                    {o}
-                  </button>
-                ))}
-              </div>
-            )}
-          </div>
-
-          {/* Menu Options */}
-          <nav className="flex items-center gap-1">
-            {menuOptions.map((opt) => (
-              <button
-                key={opt}
-                onClick={() => setActiveMenu(opt)}
-                className={`px-3 py-1.5 rounded transition-colors text-sm font-medium cursor-pointer ${
-                  opt === activeMenu
-                    ? "bg-[#13b5ea] text-white font-semibold"
-                    : isDarkMode
-                      ? "text-gray-300 hover:bg-slate-700/20 hover:text-white"
-                      : "text-slate-300 hover:bg-slate-700/60 hover:text-white"
-                }`}
-              >
-                {opt}
-              </button>
-            ))}
-          </nav>
-        </div>
-
-        {/* Right Nav Options & User Initials */}
-        <div className="flex items-center gap-4 text-white">
-          <button className="p-1.5 hover:bg-slate-700/30 rounded cursor-pointer transition-colors" title="Search">
-            <Search size={16} />
-          </button>
-          <button className="p-1.5 hover:bg-slate-700/30 rounded cursor-pointer transition-colors" title="Notifications">
-            <Bell size={16} />
-          </button>
-          <button className="p-1.5 hover:bg-slate-700/30 rounded cursor-pointer transition-colors" title="Settings">
-            <Settings size={16} />
-          </button>
-          <button className="p-1.5 hover:bg-slate-700/30 rounded cursor-pointer transition-colors" title="Help">
-            <HelpCircle size={16} />
-          </button>
-          <div className="h-4 w-[1px] bg-white/20"></div>
-          {/* User Initials icon/circle */}
-          <div className="bg-[#2a4365] text-[#ebf8ff] text-xs font-bold font-mono h-8 w-8 rounded-full flex items-center justify-center border border-white/20 shadow-sm" title="User: NA">
-            NA
-          </div>
-        </div>
-      </header>
-
+    <div className={`w-full ${pageBg} font-sans pb-12 transition-colors duration-300`}>
       {/* Main Content Area */}
-      <div className="max-w-7xl mx-auto px-6 mt-8">
+      <div className="max-w-7xl mx-auto px-6 mt-4">
         
         {/* Header Title + Stats bar */}
         <div className="flex flex-col md:flex-row justify-between items-start md:items-center gap-4 mb-8">
