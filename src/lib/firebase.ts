@@ -1,24 +1,35 @@
 import { initializeApp } from "firebase/app";
-import { 
-  getAuth, 
-  signInWithPopup, 
-  GoogleAuthProvider, 
-  onAuthStateChanged, 
-  User, 
-  signOut 
+import {
+  getAuth,
+  signInWithPopup,
+  GoogleAuthProvider,
+  onAuthStateChanged,
+  User,
+  signOut
 } from "firebase/auth";
-import { 
-  getFirestore, 
-  collection, 
-  addDoc, 
-  getDocs, 
-  updateDoc, 
-  doc, 
-  query, 
-  where, 
+import {
+  getFirestore,
+  collection,
+  addDoc,
+  getDocs,
+  updateDoc,
+  deleteDoc,
+  doc,
+  query,
+  where,
   serverTimestamp,
-  orderBy
+  orderBy,
+  Timestamp,
+  setDoc,
+  getDoc
 } from "firebase/firestore";
+import {
+  getStorage,
+  ref,
+  uploadBytes,
+  getDownloadURL,
+  deleteObject
+} from "firebase/storage";
 import firebaseConfig from "../../firebase-applet-config.json";
 
 // Initialize Firebase App
@@ -29,6 +40,9 @@ export const db = getFirestore(app);
 
 // Initialize Auth
 export const auth = getAuth(app);
+
+// Initialize Storage
+export const storage = getStorage(app);
 
 // Spreadsheet Constants
 export const SPREADSHEET_ID = "1LKX8Klgff1rCkg5WHgpOB0AyutsElafTRfLOTNMdWo4";
@@ -53,8 +67,6 @@ export const initAuth = (
       if (cachedAccessToken) {
         if (onAuthSuccess) onAuthSuccess(user, cachedAccessToken);
       } else {
-        // If logged in via Firebase but token is missing, notify success but with null token
-        // The admin can click login again to refresh the Sheets credentials
         if (onAuthSuccess) onAuthSuccess(user, null);
       }
     } else {
@@ -94,23 +106,13 @@ export const logout = async () => {
   cachedAccessToken = null;
 };
 
-/**
- * Get active cached spreadsheet token
- */
-export const getAccessToken = (): string | null => {
-  return cachedAccessToken;
-};
+export const getAccessToken = (): string | null => cachedAccessToken;
+export const setAccessToken = (token: string | null) => { cachedAccessToken = token; };
 
-/**
- * Inject OAuth access token manually
- */
-export const setAccessToken = (token: string | null) => {
-  cachedAccessToken = token;
-};
+/* ================================================================
+   LEAD SUBMISSIONS
+   ================================================================ */
 
-/**
- * Schema interface for lead submissions
- */
 export interface Submission {
   id?: string;
   name: string;
@@ -123,9 +125,6 @@ export interface Submission {
   createdAt?: any;
 }
 
-/**
- * Create a new lead submission in Firestore
- */
 export const saveSubmissionToFirestore = async (data: Omit<Submission, "syncedToSheet">): Promise<string> => {
   try {
     const docRef = await addDoc(collection(db, "submissions"), {
@@ -140,107 +139,57 @@ export const saveSubmissionToFirestore = async (data: Omit<Submission, "syncedTo
   }
 };
 
-/**
- * Fetch all submissions from Firestore
- */
 export const fetchSubmissions = async (): Promise<Submission[]> => {
   try {
     const q = query(collection(db, "submissions"), orderBy("createdAt", "desc"));
     const snapshot = await getDocs(q);
-    return snapshot.docs.map(d => ({
-      id: d.id,
-      ...d.data()
-    })) as Submission[];
+    return snapshot.docs.map(d => ({ id: d.id, ...d.data() })) as Submission[];
   } catch (error) {
     console.error("Failed to read submissions from database:", error);
     throw error;
   }
 };
 
-/**
- * Fetch the first worksheet tab title dynamically to avoid assumes of Sheet1 name
- */
+/* ================================================================
+   GOOGLE SHEETS SYNC
+   ================================================================ */
+
 export const getFirstWorksheetTitle = async (accessToken: string, spreadsheetId: string): Promise<string> => {
   try {
     const res = await fetch(`https://sheets.googleapis.com/v4/spreadsheets/${spreadsheetId}`, {
-      headers: { 
-        Authorization: `Bearer ${accessToken}`,
-        "Content-Type": "application/json"
-      }
+      headers: { Authorization: `Bearer ${accessToken}`, "Content-Type": "application/json" }
     });
     if (!res.ok) throw new Error("Metadata read failed");
     const metadata = await res.json();
     const sheets = metadata.sheets;
-    if (sheets && sheets.length > 0) {
-      return sheets[0].properties.title;
-    }
+    if (sheets && sheets.length > 0) return sheets[0].properties.title;
     return "Sheet1";
   } catch {
-    return "Sheet1"; // fallback safely
+    return "Sheet1";
   }
 };
 
-/**
- * Push an array of submissions to Google Sheets using the Sheets Append API
- */
-export const appendSubmissionsToSheet = async (
-  accessToken: string,
-  submissions: Submission[]
-): Promise<boolean> => {
+export const appendSubmissionsToSheet = async (accessToken: string, submissions: Submission[]): Promise<boolean> => {
   if (submissions.length === 0) return true;
-
   try {
     const sheetName = await getFirstWorksheetTitle(accessToken, SPREADSHEET_ID);
     const range = `${sheetName}!A:G`;
-    
-    // Structure submissions as table row sheets
-    // Columns: [ID / Reference, Date, Name, Email, Phone, Inquiry Requirement, Capital Target, Message]
     const rows = submissions.map(sub => {
       let formattedDate = "";
       if (sub.createdAt) {
-        if (sub.createdAt.toDate) {
-          formattedDate = sub.createdAt.toDate().toLocaleString("en-AU");
-        } else if (sub.createdAt instanceof Date) {
-          formattedDate = sub.createdAt.toLocaleString("en-AU");
-        } else {
-          formattedDate = new Date(sub.createdAt).toLocaleString("en-AU");
-        }
+        if (sub.createdAt.toDate) formattedDate = sub.createdAt.toDate().toLocaleString("en-AU");
+        else if (sub.createdAt instanceof Date) formattedDate = sub.createdAt.toLocaleString("en-AU");
+        else formattedDate = new Date(sub.createdAt).toLocaleString("en-AU");
       } else {
         formattedDate = new Date().toLocaleString("en-AU");
       }
-
-      return [
-        sub.id || "N/A",
-        formattedDate,
-        sub.name,
-        sub.email,
-        sub.phone,
-        sub.loanType,
-        sub.loanAmount,
-        sub.message || ""
-      ];
+      return [sub.id || "N/A", formattedDate, sub.name, sub.email, sub.phone, sub.loanType, sub.loanAmount, sub.message || ""];
     });
-
     const response = await fetch(
       `https://sheets.googleapis.com/v4/spreadsheets/${SPREADSHEET_ID}/values/${encodeURIComponent(range)}:append?valueInputOption=USER_ENTERED`,
-      {
-        method: "POST",
-        headers: {
-          Authorization: `Bearer ${accessToken}`,
-          "Content-Type": "application/json"
-        },
-        body: JSON.stringify({
-          values: rows
-        })
-      }
+      { method: "POST", headers: { Authorization: `Bearer ${accessToken}`, "Content-Type": "application/json" }, body: JSON.stringify({ values: rows }) }
     );
-
-    if (!response.ok) {
-      const errBody = await response.json().catch(() => ({}));
-      console.error("Google Sheets API rejected submission append:", errBody);
-      return false;
-    }
-
+    if (!response.ok) { const errBody = await response.json().catch(() => ({})); console.error("Google Sheets API rejected:", errBody); return false; }
     return true;
   } catch (error) {
     console.error("Google Sheets synchronization error:", error);
@@ -248,47 +197,210 @@ export const appendSubmissionsToSheet = async (
   }
 };
 
-/**
- * Core Orchestrator: Syncs all pending unsynced submissions to Google Sheets
- */
 export const syncUnsyncedToSheets = async (accessToken: string): Promise<{ success: number; failed: number }> => {
   try {
     const q = query(collection(db, "submissions"), where("syncedToSheet", "==", false));
     const snapshot = await getDocs(q);
-    const unsyncedDocs = snapshot.docs.map(d => ({
-      id: d.id,
-      ...d.data()
-    })) as Submission[];
-
-    if (unsyncedDocs.length === 0) {
-      return { success: 0, failed: 0 };
-    }
-
-    // Attempt append
+    const unsyncedDocs = snapshot.docs.map(d => ({ id: d.id, ...d.data() })) as Submission[];
+    if (unsyncedDocs.length === 0) return { success: 0, failed: 0 };
     const syncOk = await appendSubmissionsToSheet(accessToken, unsyncedDocs);
-    if (!syncOk) {
-      throw new Error("Append execution returned falsy status");
-    }
-
-    // Flag as synced in Firestore
-    let successCount = 0;
-    let failedCount = 0;
-
+    if (!syncOk) throw new Error("Append execution returned falsy status");
+    let successCount = 0, failedCount = 0;
     for (const sub of unsyncedDocs) {
       if (!sub.id) continue;
-      try {
-        const docRef = doc(db, "submissions", sub.id);
-        await updateDoc(docRef, { syncedToSheet: true });
-        successCount++;
-      } catch (err) {
-        console.error(`Failed to update sync flag for submission ${sub.id}:`, err);
-        failedCount++;
-      }
+      try { await updateDoc(doc(db, "submissions", sub.id), { syncedToSheet: true }); successCount++; }
+      catch (err) { console.error(`Failed to update sync flag for ${sub.id}:`, err); failedCount++; }
     }
-
     return { success: successCount, failed: failedCount };
   } catch (error) {
     console.error("Sheet synchronization failed:", error);
+    throw error;
+  }
+};
+
+/* ================================================================
+   INVOICE FIRESTORE CRUD
+   ================================================================ */
+
+export interface InvoiceAttachment {
+  name: string;
+  url: string;
+  type: string;
+}
+
+export interface FirestoreInvoice {
+  id?: string;
+  number: string;
+  clientId: string;
+  company: string;
+  issueDate: string;
+  dueDate: string;
+  status: "draft" | "sent" | "paid" | "overdue";
+  items: Array<{ desc: string; qty: number; price: number }>;
+  autoGenerated: boolean;
+  emailSentAt: string | null;
+  reminderSentAt: string | null;
+  reminderSentCount: number;
+  lastMailLog: string;
+  createdAt?: any;
+}
+
+export const fetchInvoices = async (): Promise<FirestoreInvoice[]> => {
+  try {
+    const q = query(collection(db, "invoices"), orderBy("createdAt", "desc"));
+    const snapshot = await getDocs(q);
+    return snapshot.docs.map(d => ({ id: d.id, ...d.data() })) as FirestoreInvoice[];
+  } catch (error) {
+    console.error("Failed to fetch invoices:", error);
+    return [];
+  }
+};
+
+export const saveInvoice = async (invoice: Omit<FirestoreInvoice, "id" | "createdAt">): Promise<string> => {
+  try {
+    const docRef = await addDoc(collection(db, "invoices"), {
+      ...invoice,
+      createdAt: serverTimestamp()
+    });
+    return docRef.id;
+  } catch (error) {
+    console.error("Failed to save invoice:", error);
+    throw error;
+  }
+};
+
+export const updateInvoiceStatus = async (id: string, status: string): Promise<void> => {
+  try {
+    await updateDoc(doc(db, "invoices", id), { status });
+  } catch (error) {
+    console.error("Failed to update invoice status:", error);
+    throw error;
+  }
+};
+
+export const updateInvoiceEmailLog = async (id: string, fields: Partial<Pick<FirestoreInvoice, "emailSentAt" | "reminderSentAt" | "reminderSentCount" | "lastMailLog" | "status">>): Promise<void> => {
+  try {
+    await updateDoc(doc(db, "invoices", id), fields as any);
+  } catch (error) {
+    console.error("Failed to update invoice email log:", error);
+    throw error;
+  }
+};
+
+export const getUnpaidInvoicesOlderThan14Days = async (): Promise<FirestoreInvoice[]> => {
+  try {
+    const cutoff = new Date();
+    cutoff.setDate(cutoff.getDate() - 14);
+    const q = query(
+      collection(db, "invoices"),
+      where("status", "in", ["sent", "overdue"]),
+      where("reminderSentCount", "==", 0)
+    );
+    const snapshot = await getDocs(q);
+    const invoices = snapshot.docs.map(d => ({ id: d.id, ...d.data() })) as FirestoreInvoice[];
+    return invoices.filter(inv => {
+      if (!inv.emailSentAt) return false;
+      return new Date(inv.emailSentAt) <= cutoff;
+    });
+  } catch (error) {
+    console.error("Failed to query unpaid invoices:", error);
+    return [];
+  }
+};
+
+/* ================================================================
+   EXPENSE ATTACHMENT — FIREBASE STORAGE
+   ================================================================ */
+
+export interface ExpenseAttachment {
+  name: string;
+  url: string;
+  type: string;
+  storagePath: string;
+  uploadedAt: string;
+}
+
+/**
+ * Upload a memo/document file for an expense to Firebase Storage.
+ * Returns the attachment metadata with the public download URL.
+ */
+export const uploadExpenseAttachment = async (expenseId: string, file: File): Promise<ExpenseAttachment> => {
+  try {
+    const storagePath = `expenses/${expenseId}/${Date.now()}_${file.name}`;
+    const storageRef = ref(storage, storagePath);
+    await uploadBytes(storageRef, file);
+    const url = await getDownloadURL(storageRef);
+    return {
+      name: file.name,
+      url,
+      type: file.type,
+      storagePath,
+      uploadedAt: new Date().toISOString()
+    };
+  } catch (error) {
+    console.error("Failed to upload attachment:", error);
+    throw error;
+  }
+};
+
+export const deleteExpenseAttachment = async (storagePath: string): Promise<void> => {
+  try {
+    const storageRef = ref(storage, storagePath);
+    await deleteObject(storageRef);
+  } catch (error) {
+    console.error("Failed to delete attachment:", error);
+    throw error;
+  }
+};
+
+/* ================================================================
+   EXPENSE EDIT REQUESTS (for Admin role approval flow)
+   ================================================================ */
+
+export interface ExpenseEditRequest {
+  id?: string;
+  expenseId: string;
+  requestedBy: string;
+  requestedAt: string;
+  proposedChanges: Record<string, any>;
+  status: "pending" | "approved" | "rejected";
+  resolvedAt?: string;
+  resolvedBy?: string;
+}
+
+export const saveEditRequest = async (request: Omit<ExpenseEditRequest, "id">): Promise<string> => {
+  try {
+    const docRef = await addDoc(collection(db, "expense_edit_requests"), {
+      ...request,
+      createdAt: serverTimestamp()
+    });
+    return docRef.id;
+  } catch (error) {
+    console.error("Failed to save edit request:", error);
+    throw error;
+  }
+};
+
+export const getPendingEditRequests = async (): Promise<ExpenseEditRequest[]> => {
+  try {
+    const q = query(collection(db, "expense_edit_requests"), where("status", "==", "pending"), orderBy("requestedAt", "desc"));
+    const snapshot = await getDocs(q);
+    return snapshot.docs.map(d => ({ id: d.id, ...d.data() })) as ExpenseEditRequest[];
+  } catch (error) {
+    console.error("Failed to fetch pending edit requests:", error);
+    return [];
+  }
+};
+
+export const resolveEditRequest = async (requestId: string, status: "approved" | "rejected", resolvedBy: string): Promise<void> => {
+  try {
+    await updateDoc(doc(db, "expense_edit_requests", requestId), {
+      status,
+      resolvedAt: new Date().toISOString(),
+      resolvedBy
+    });
+  } catch (error) {
+    console.error("Failed to resolve edit request:", error);
     throw error;
   }
 };

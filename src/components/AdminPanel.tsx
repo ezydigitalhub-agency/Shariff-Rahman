@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useMemo } from "react";
+import React, { useState, useEffect, useMemo, useRef } from "react";
 import {
   PieChart, Pie, Cell, ResponsiveContainer, Tooltip, Legend,
   BarChart, Bar, XAxis, YAxis, CartesianGrid,
@@ -6,14 +6,17 @@ import {
 import {
   LayoutDashboard, Users, TrendingUp, Wallet, FileText, ShieldCheck,
   Plus, Search, Trash2, Pencil, X, CheckCircle2, Clock, AlertTriangle,
-  Send, Building2, Mail, LogOut, Eye, Lock, Sun, Moon,
+  Send, Building2, Mail, LogOut, Eye, Lock, Sun, Moon, ClipboardCheck,
+  Paperclip, Upload, FileIcon, Download, RotateCcw, AlertCircle
 } from "lucide-react";
 import XeroSales from "./XeroSales";
 import XeroInvoices from "./XeroInvoices";
+import { uploadExpenseAttachment, saveEditRequest, getPendingEditRequests, resolveEditRequest } from "../lib/firebase";
+import type { ExpenseAttachment, ExpenseEditRequest } from "../lib/firebase";
 
 /* ----------------------------------------------------------------------- *
- *  EZY GROUP — Business Admin Panel (interactive prototype)
- *  Two entities: EZY MORTGAGE AUSTRALIA PTY LTD & EZY OUTSOURCE PTY LTD
+ *  EZY GROUP — Business Admin Panel
+ *  Roles: Super Admin / Manager / Admin
  * ----------------------------------------------------------------------- */
 
 interface AdminPanelProps {
@@ -35,7 +38,24 @@ const BANK_ACCOUNTS = [
 const INCOME_CATEGORIES = ["Loan Settlement", "Brokerage Commission", "Outsourcing Fee", "Consulting", "Other"];
 const SERVICES = ["Home Loan", "Refinance", "Commercial Loan", "Back-office", "Lead Generation", "Accounting Support"];
 const EXPENSE_CATEGORIES = ["Office Operations", "Administration", "Subscription Purchase", "Salary Expense"];
-const SECTIONS = ["overview", "clients", "income", "expense", "invoices", "users"];
+
+// Sections each role can see
+const ROLE_MENUS: Record<string, string[]> = {
+  "Super Admin": ["overview", "clients", "income", "expense", "invoices", "users", "approvals"],
+  "Manager":     ["income", "expense", "invoices"],
+  "Admin":       ["expense"],
+};
+
+const SECTIONS = ["overview", "clients", "income", "expense", "invoices", "users", "approvals"];
+
+/* ---------- permission helpers ---------- */
+function permsFor(role: string) {
+  const p: Record<string, string> = {};
+  SECTIONS.forEach(s => p[s] = "none");
+  const menus = ROLE_MENUS[role] || [];
+  menus.forEach(s => p[s] = "edit");
+  return p;
+}
 
 /* ---------- seed data ---------- */
 const seed = () => ({
@@ -51,47 +71,37 @@ const seed = () => ({
     { id: "i4", clientId: "c2", company: "outsource", category: "Consulting", service: "Accounting Support", amount: 2100, date: "2026-06-02", status: "unpaid", note: "" },
   ],
   expenses: [
-    { id: "e1", company: "mortgage", category: "Office Operations", sub: "Rent", amount: 3200, date: "2026-05-01", note: "Sydney office" },
-    { id: "e2", company: "outsource", category: "Subscription Purchase", sub: "Xero + CRM", amount: 480, date: "2026-05-03", note: "" },
-    { id: "e3", company: "mortgage", category: "Salary Expense", sub: "Sarah Lin (Broker)", amount: 6500, date: "2026-05-30", note: "May salary" },
-    { id: "e4", company: "outsource", category: "Salary Expense", sub: "Team — Manila", amount: 4800, date: "2026-05-30", note: "May salary" },
-    { id: "e5", company: "mortgage", category: "Administration", sub: "Accounting fees", amount: 950, date: "2026-05-15", note: "" },
+    { id: "e1", company: "mortgage", category: "Office Operations", sub: "Rent", amount: 3200, date: "2026-05-01", note: "Sydney office", attachments: [], firstEditUsed: false, editRequests: [] },
+    { id: "e2", company: "outsource", category: "Subscription Purchase", sub: "Xero + CRM", amount: 480, date: "2026-05-03", note: "", attachments: [], firstEditUsed: false, editRequests: [] },
+    { id: "e3", company: "mortgage", category: "Salary Expense", sub: "Sarah Lin (Broker)", amount: 6500, date: "2026-05-30", note: "May salary", attachments: [], firstEditUsed: false, editRequests: [] },
+    { id: "e4", company: "outsource", category: "Salary Expense", sub: "Team — Manila", amount: 4800, date: "2026-05-30", note: "May salary", attachments: [], firstEditUsed: false, editRequests: [] },
+    { id: "e5", company: "mortgage", category: "Administration", sub: "Accounting fees", amount: 950, date: "2026-05-15", note: "", attachments: [], firstEditUsed: false, editRequests: [] },
   ],
   invoices: [
-    { id: "inv1", number: "INV-1001", clientId: "c1", company: "mortgage", issueDate: "2026-05-01", dueDate: "2026-05-15", status: "paid",
-      items: [{ desc: "Home loan brokerage service", qty: 1, price: 8500 }] },
-    { id: "inv2", number: "INV-1002", clientId: "c2", company: "outsource", issueDate: "2026-05-01", dueDate: "2026-05-15", status: "sent",
-      items: [{ desc: "Monthly back-office retainer", qty: 1, price: 6300 }] },
-    { id: "inv3", number: "INV-1003", clientId: "c3", company: "mortgage", issueDate: "2026-04-01", dueDate: "2026-04-15", status: "overdue",
-      items: [{ desc: "Refinance commission", qty: 1, price: 4200 }] },
+    { id: "inv1", number: "INV-1001", clientId: "c1", company: "mortgage", issueDate: "2026-05-01", dueDate: "2026-05-15", status: "paid", items: [{ desc: "Home loan brokerage service", qty: 1, price: 8500 }], autoGenerated: false, emailSentAt: "2026-05-01T09:00:00Z", reminderSentAt: null, reminderSentCount: 0, lastMailLog: "Invoice sent 1 May 2026" },
+    { id: "inv2", number: "INV-1002", clientId: "c2", company: "outsource", issueDate: "2026-05-01", dueDate: "2026-05-15", status: "sent", items: [{ desc: "Monthly back-office retainer", qty: 1, price: 6300 }], autoGenerated: true, emailSentAt: "2026-05-01T09:00:00Z", reminderSentAt: "2026-05-15T09:00:00Z", reminderSentCount: 1, lastMailLog: "Reminder sent 15 May 2026" },
+    { id: "inv3", number: "INV-1003", clientId: "c3", company: "mortgage", issueDate: "2026-04-01", dueDate: "2026-04-15", status: "overdue", items: [{ desc: "Refinance commission", qty: 1, price: 4200 }], autoGenerated: true, emailSentAt: "2026-04-01T09:00:00Z", reminderSentAt: "2026-04-15T09:00:00Z", reminderSentCount: 1, lastMailLog: "Reminder sent 15 Apr 2026" },
   ],
   users: [
-    { id: "u1", name: "Managing Director", email: "md@ezygroup.com.au", role: "CEO", perms: fullPerms() },
-    { id: "u2", name: "Operations Manager", email: "ops@ezygroup.com.au", role: "Manager",
-      perms: { overview: "view", clients: "edit", income: "edit", expense: "view", invoices: "edit", users: "none", xero_sales: "edit", xero_invoices: "edit" } },
-    { id: "u3", name: "Accounts Staff", email: "accounts@ezygroup.com.au", role: "Staff",
-      perms: { overview: "view", clients: "view", income: "edit", expense: "edit", invoices: "view", users: "none", xero_sales: "view", xero_invoices: "view" } },
+    { id: "u1", name: "Shariff Rahman", email: "shariff@ezygroup.com.au", role: "Super Admin", perms: permsFor("Super Admin") },
+    { id: "u2", name: "Operations Manager", email: "ops@ezygroup.com.au", role: "Manager", perms: permsFor("Manager") },
+    { id: "u3", name: "Accounts Staff", email: "accounts@ezygroup.com.au", role: "Admin", perms: permsFor("Admin") },
   ],
+  // Pending edit requests (stored locally alongside DB; synced to Firestore in production)
+  editRequests: [] as any[],
 });
 
-function fullPerms() {
-  const p: any = {};
-  SECTIONS.forEach((s) => (p[s] = "edit"));
-  return p;
-}
-
-/* ---------- storage layer (persists across sessions, falls back to memory) ---------- */
-const KEY = "ezy_admin_db_v3";
+/* ---------- storage layer ---------- */
+const KEY = "ezy_admin_db_v4";
 async function loadDB() {
   try {
     const localVal = localStorage.getItem(KEY);
     if (localVal) return JSON.parse(localVal);
-
     if (typeof window !== "undefined" && (window as any).storage) {
       const r = await (window as any).storage.get(KEY);
       if (r && r.value) return JSON.parse(r.value);
     }
-  } catch (e) { /* not found / unavailable */ }
+  } catch (e) { /* not found */ }
   const data = seed();
   saveDB(data);
   return data;
@@ -120,17 +130,52 @@ export default function AdminPanel({ onBackToHome, isDarkMode = false, onToggleT
   const [db, setDb] = useState<any>(null);
   const [user, setUser] = useState<any>(null);
   const [section, setSection] = useState("overview");
-  const [scope, setScope] = useState("all"); // all | mortgage | outsource
+  const [scope, setScope] = useState("all");
 
-  useEffect(() => { loadDB().then((d) => { setDb(d); setUser(d.users[0]); }); }, []);
+  useEffect(() => {
+    loadDB().then((d) => {
+      // Migrate old DB — ensure new fields exist on existing records
+      d.expenses = (d.expenses || []).map((e: any) => ({
+        attachments: [],
+        firstEditUsed: false,
+        editRequests: [],
+        ...e,
+      }));
+      d.invoices = (d.invoices || []).map((inv: any) => ({
+        autoGenerated: false,
+        emailSentAt: null,
+        reminderSentAt: null,
+        reminderSentCount: 0,
+        lastMailLog: "",
+        ...inv,
+      }));
+      if (!d.editRequests) d.editRequests = [];
+      // Migrate users to new role system if needed
+      d.users = (d.users || []).map((u: any) => {
+        if (u.role === "CEO") return { ...u, role: "Super Admin", perms: permsFor("Super Admin") };
+        if (u.role === "Staff") return { ...u, role: "Admin", perms: permsFor("Admin") };
+        if (u.role === "Manager") return { ...u, perms: permsFor("Manager") };
+        return u;
+      });
+      setDb(d);
+      setUser(d.users[0]);
+    });
+  }, []);
+
   const commit = (next: any) => { setDb(next); saveDB(next); };
 
   if (!db || !user) return <Splash />;
 
   const can = (sec: string) => user.perms[sec] && user.perms[sec] !== "none";
   const canEdit = (sec: string) => user.perms[sec] === "edit";
+  const isSuperAdmin = user.role === "Super Admin";
+  const isAdmin = user.role === "Admin";
+
   const visibleSections = SECTIONS.filter(can);
   const activeSection = visibleSections.includes(section) ? section : visibleSections[0];
+
+  // Count pending approvals for badge
+  const pendingApprovals = (db.editRequests || []).filter((r: any) => r.status === "pending").length;
 
   return (
     <div className="ezy-root">
@@ -148,26 +193,20 @@ export default function AdminPanel({ onBackToHome, isDarkMode = false, onToggleT
           {NAV.filter((n) => can(n.key)).map((n) => (
             <button key={n.key}
               className={`nav-item ${activeSection === n.key ? "active" : ""}`}
-              onClick={() => setSection(n.key)}>
-              <n.icon size={18} /> <span>{n.label}</span>
+              onClick={() => setSection(n.key)}
+              style={{ position: "relative" }}
+            >
+              <n.icon size={18} />
+              <span>{n.label}</span>
+              {n.key === "approvals" && pendingApprovals > 0 && (
+                <span style={{ marginLeft: "auto", background: "#ff6900", color: "#fff", borderRadius: "10px", fontSize: "11px", fontWeight: 700, padding: "1px 7px", minWidth: "20px", textAlign: "center" }}>{pendingApprovals}</span>
+              )}
             </button>
           ))}
         </nav>
         <div className="sidebar-foot" style={{ display: "flex", flexDirection: "column", gap: "10px" }}>
-          <button 
-            className="btn sm full font-semibold" 
-            onClick={onBackToHome}
-            style={{ 
-              background: "#1a212a", 
-              borderColor: "#232b34", 
-              color: "#cdd3da", 
-              display: "flex", 
-              alignItems: "center", 
-              justifyContent: "center", 
-              gap: "6px",
-              cursor: "pointer"
-            }}
-          >
+          <button className="btn sm full font-semibold" onClick={onBackToHome}
+            style={{ background: "#1a212a", borderColor: "#232b34", color: "#cdd3da", display: "flex", alignItems: "center", justifyContent: "center", gap: "6px", cursor: "pointer" }}>
             ← Customer Website
           </button>
           <div className="who">
@@ -194,25 +233,8 @@ export default function AdminPanel({ onBackToHome, isDarkMode = false, onToggleT
               {db.users.map((u: any) => <option key={u.id} value={u.id}>View as: {u.name} ({u.role})</option>)}
             </select>
             {onToggleTheme && (
-              <button
-                onClick={onToggleTheme}
-                title={isDarkMode ? "Switch to Light Mode" : "Switch to Dark Mode"}
-                style={{
-                  background: isDarkMode ? "#151c28" : "#fff",
-                  border: "1px solid",
-                  borderColor: isDarkMode ? "#1e2633" : "#e2ddd4",
-                  borderRadius: "9px",
-                  padding: "9px",
-                  display: "flex",
-                  alignItems: "center",
-                  justifyContent: "center",
-                  cursor: "pointer",
-                  color: isDarkMode ? "#ff6900" : "#2563eb",
-                  transition: "all 0.15s",
-                  height: "37px",
-                  width: "37px"
-                }}
-              >
+              <button onClick={onToggleTheme} title={isDarkMode ? "Switch to Light Mode" : "Switch to Dark Mode"}
+                style={{ background: isDarkMode ? "#151c28" : "#fff", border: "1px solid", borderColor: isDarkMode ? "#1e2633" : "#e2ddd4", borderRadius: "9px", padding: "9px", display: "flex", alignItems: "center", justifyContent: "center", cursor: "pointer", color: isDarkMode ? "#ff6900" : "#2563eb", transition: "all 0.15s", height: "37px", width: "37px" }}>
                 {isDarkMode ? <Sun size={16} /> : <Moon size={16} />}
               </button>
             )}
@@ -220,12 +242,13 @@ export default function AdminPanel({ onBackToHome, isDarkMode = false, onToggleT
         </header>
 
         <div className="content">
-          {activeSection === "overview" && <Overview db={db} scope={scope} />}
-          {activeSection === "clients" && <Clients db={db} commit={commit} scope={scope} canEdit={canEdit("clients")} />}
-          {activeSection === "income" && <Income db={db} commit={commit} scope={scope} canEdit={canEdit("income")} />}
-          {activeSection === "expense" && <Expense db={db} commit={commit} scope={scope} canEdit={canEdit("expense")} />}
-          {activeSection === "invoices" && <Invoices db={db} commit={commit} scope={scope} canEdit={canEdit("invoices")} isDarkMode={isDarkMode} />}
-          {activeSection === "users" && <UsersMgmt db={db} commit={commit} canEdit={canEdit("users")} />}
+          {activeSection === "overview"  && <Overview db={db} scope={scope} />}
+          {activeSection === "clients"   && <Clients db={db} commit={commit} scope={scope} canEdit={canEdit("clients")} />}
+          {activeSection === "income"    && <Income db={db} commit={commit} scope={scope} canEdit={canEdit("income")} />}
+          {activeSection === "expense"   && <Expense db={db} commit={commit} scope={scope} canEdit={canEdit("expense")} currentUser={user} isSuperAdmin={isSuperAdmin} isAdminRole={isAdmin} />}
+          {activeSection === "invoices"  && <Invoices db={db} commit={commit} scope={scope} canEdit={canEdit("invoices")} isDarkMode={isDarkMode} />}
+          {activeSection === "users"     && <UsersMgmt db={db} commit={commit} canEdit={isSuperAdmin} />}
+          {activeSection === "approvals" && <Approvals db={db} commit={commit} isSuperAdmin={isSuperAdmin} />}
         </div>
       </main>
     </div>
@@ -233,12 +256,13 @@ export default function AdminPanel({ onBackToHome, isDarkMode = false, onToggleT
 }
 
 const NAV = [
-  { key: "overview", label: "Overview", icon: LayoutDashboard },
-  { key: "clients", label: "Client List", icon: Users },
-  { key: "income", label: "Income", icon: TrendingUp },
-  { key: "expense", label: "Expense", icon: Wallet },
-  { key: "invoices", label: "Invoice System", icon: FileText },
-  { key: "users", label: "User Management", icon: ShieldCheck },
+  { key: "overview",   label: "Overview",        icon: LayoutDashboard },
+  { key: "clients",    label: "Client List",      icon: Users },
+  { key: "income",     label: "Income",           icon: TrendingUp },
+  { key: "expense",    label: "Expense",          icon: Wallet },
+  { key: "invoices",   label: "Invoice System",   icon: FileText },
+  { key: "users",      label: "User Management",  icon: ShieldCheck },
+  { key: "approvals",  label: "Approvals",        icon: ClipboardCheck },
 ];
 
 /* ============================ OVERVIEW ============================ */
@@ -276,23 +300,14 @@ function Overview({ db, scope }: { db: any; scope: string }) {
         <Stat label="Paid / Received" value={fmt(paid)} tone="green2" sub={`${income.filter((i: any)=>i.status==='paid').length} paid`} />
         <Stat label="Outstanding" value={fmt(unpaid)} tone="amber" sub={`${income.filter((i: any)=>i.status==='unpaid').length} unpaid`} />
       </div>
-
       <div className="cards">
         <Stat label="Net Position" value={fmt(net)} tone={net >= 0 ? "green" : "red"} sub="Income − Expense" wide />
       </div>
-
       <div className="chart-grid">
-        <Panel title="Income by Company">
-          <DonutChart data={byCompany} />
-        </Panel>
-        <Panel title="Paid vs Outstanding">
-          <DonutChart data={paidData} />
-        </Panel>
-        <Panel title="Expense Breakdown">
-          <DonutChart data={expByCat} />
-        </Panel>
+        <Panel title="Income by Company"><DonutChart data={byCompany} /></Panel>
+        <Panel title="Paid vs Outstanding"><DonutChart data={paidData} /></Panel>
+        <Panel title="Expense Breakdown"><DonutChart data={expByCat} /></Panel>
       </div>
-
       <Panel title="Income vs Expense by Company">
         <ResponsiveContainer width="100%" height={260}>
           <BarChart data={Object.keys(COMPANIES).filter(k=>scope==='all'||k===scope).map((k) => ({
@@ -487,17 +502,73 @@ function IncomeModal({ db, onSave, onClose }: { db: any; onSave: (rec: any) => v
 }
 
 /* ============================ EXPENSE ============================ */
-function Expense({ db, commit, scope, canEdit }: { db: any; commit: (next: any) => void; scope: string; canEdit: boolean }) {
+function Expense({ db, commit, scope, canEdit, currentUser, isSuperAdmin, isAdminRole }: {
+  db: any; commit: (next: any) => void; scope: string; canEdit: boolean;
+  currentUser: any; isSuperAdmin: boolean; isAdminRole: boolean;
+}) {
   const [open, setOpen] = useState(false);
+  const [editTarget, setEditTarget] = useState<any>(null);
+  const [requestEditTarget, setRequestEditTarget] = useState<any>(null);
   const [cat, setCat] = useState("all");
+
   const rows = db.expenses
     .filter((e: any) => scope === "all" || e.company === scope)
     .filter((e: any) => cat === "all" || e.category === cat);
+
   const total = rows.reduce((s: number, e: any) => s + e.amount, 0);
   const salary = rows.filter((e: any) => e.category === "Salary Expense").reduce((s: number, e: any) => s + e.amount, 0);
 
-  const save = (rec: any) => { commit({ ...db, expenses: [...db.expenses, { ...rec, id: uid() }] }); setOpen(false); };
-  const remove = (id: string) => commit({ ...db, expenses: db.expenses.filter((e: any) => e.id !== id) });
+  const save = (rec: any) => { commit({ ...db, expenses: [...db.expenses, { ...rec, id: uid(), attachments: rec.attachments || [], firstEditUsed: false, editRequests: [] }] }); setOpen(false); };
+
+  const saveEdit = (updated: any) => {
+    const next = { ...db, expenses: db.expenses.map((e: any) => e.id === updated.id ? { ...updated, firstEditUsed: true } : e) };
+    commit(next);
+    setEditTarget(null);
+  };
+
+  const remove = (id: string) => {
+    if (isAdminRole) return; // Admin cannot delete
+    commit({ ...db, expenses: db.expenses.filter((e: any) => e.id !== id) });
+  };
+
+  // Attach a file to an existing expense
+  const handleAttach = async (expenseId: string, file: File) => {
+    try {
+      const attachment = await uploadExpenseAttachment(expenseId, file);
+      const next = {
+        ...db,
+        expenses: db.expenses.map((e: any) =>
+          e.id === expenseId ? { ...e, attachments: [...(e.attachments || []), attachment] } : e
+        )
+      };
+      commit(next);
+    } catch {
+      alert("File upload failed. Please ensure Firebase Storage is enabled on the Blaze plan.");
+    }
+  };
+
+  // Submit an edit request (Admin role, after first edit is used)
+  const submitEditRequest = (expense: any, proposed: any) => {
+    const req = {
+      id: uid(),
+      expenseId: expense.id,
+      requestedBy: currentUser.name,
+      requestedAt: new Date().toISOString(),
+      proposedChanges: proposed,
+      status: "pending",
+    };
+    const next = {
+      ...db,
+      editRequests: [...(db.editRequests || []), req],
+      expenses: db.expenses.map((e: any) =>
+        e.id === expense.id ? { ...e, editRequests: [...(e.editRequests || []), req] } : e
+      )
+    };
+    commit(next);
+    setRequestEditTarget(null);
+  };
+
+  const canDeleteRow = canEdit && !isAdminRole;
 
   return (
     <div className="stack">
@@ -506,28 +577,136 @@ function Expense({ db, commit, scope, canEdit }: { db: any; commit: (next: any) 
         <Stat label="Salary Expense" value={fmt(salary)} tone="purple" sub="sub-category" />
         <Stat label="Operating (non-salary)" value={fmt(total - salary)} tone="slate" />
       </div>
+      {isAdminRole && (
+        <div className="automation-note" style={{ background: "#fff3e0", borderColor: "#ffcc80", color: "#e65100" }}>
+          <AlertCircle size={18} />
+          <div>
+            <strong>Admin Access:</strong> You can add expenses and upload documents. You may edit each expense <strong>once</strong> without approval. Further edits require Super Admin approval — a request will be submitted automatically.
+          </div>
+        </div>
+      )}
       <Toolbar
         filters={<select value={cat} onChange={(e) => setCat(e.target.value)}><option value="all">All categories</option>{EXPENSE_CATEGORIES.map((c) => <option key={c}>{c}</option>)}</select>}
         action={canEdit && <button className="btn primary" onClick={() => setOpen(true)}><Plus size={16}/> New Expense</button>} />
       <div className="table-wrap">
         <table>
-          <thead><tr><th>Date</th><th>Category</th><th>Detail / Sub-category</th><th>Entity</th><th className="r">Amount</th>{canEdit && <th></th>}</tr></thead>
+          <thead><tr><th>Date</th><th>Category</th><th>Detail</th><th>Entity</th><th className="r">Amount</th><th>Attachments</th><th></th></tr></thead>
           <tbody>
-            {rows.map((e: any) => (
-              <tr key={e.id}>
-                <td>{e.date}</td>
-                <td>{e.category === "Salary Expense" ? <Tag tone="purple">Salary</Tag> : e.category}</td>
-                <td className="strong">{e.sub}<div className="muted-sm">{e.note}</div></td>
-                <td><Tag>{e.company === "mortgage" ? "Mortgage" : "Outsource"}</Tag></td>
-                <td className="r strong">{fmt2(e.amount)}</td>
-                {canEdit && <td className="row-actions"><button onClick={() => remove(e.id)}><Trash2 size={15}/></button></td>}
-              </tr>
-            ))}
-            {!rows.length && <tr><td colSpan={6} className="empty">No expenses</td></tr>}
+            {rows.map((e: any) => {
+              const hasPendingRequest = (e.editRequests || []).some((r: any) => r.status === "pending");
+              return (
+                <tr key={e.id}>
+                  <td>{e.date}</td>
+                  <td>{e.category === "Salary Expense" ? <Tag tone="purple">Salary</Tag> : e.category}</td>
+                  <td className="strong">{e.sub}<div className="muted-sm">{e.note}</div></td>
+                  <td><Tag>{e.company === "mortgage" ? "Mortgage" : "Outsource"}</Tag></td>
+                  <td className="r strong">{fmt2(e.amount)}</td>
+                  <td>
+                    <AttachmentCell
+                      attachments={e.attachments || []}
+                      expenseId={e.id}
+                      canUpload={canEdit}
+                      onAttach={(file) => handleAttach(e.id, file)}
+                    />
+                  </td>
+                  <td className="row-actions">
+                    {canEdit && (
+                      hasPendingRequest ? (
+                        <span style={{ fontSize: "11px", color: "#d9930a", fontWeight: 600, padding: "3px 8px", background: "#fdeccd", borderRadius: "6px" }}>Pending</span>
+                      ) : !e.firstEditUsed ? (
+                        <button title="Edit (free first edit)" onClick={() => setEditTarget(e)}><Pencil size={15}/></button>
+                      ) : isAdminRole ? (
+                        <button title="Request edit (needs Super Admin approval)" onClick={() => setRequestEditTarget(e)} style={{ color: "#d9930a" }}><RotateCcw size={15}/></button>
+                      ) : (
+                        <button title="Edit" onClick={() => setEditTarget(e)}><Pencil size={15}/></button>
+                      )
+                    )}
+                    {canDeleteRow && <button onClick={() => remove(e.id)}><Trash2 size={15}/></button>}
+                  </td>
+                </tr>
+              );
+            })}
+            {!rows.length && <tr><td colSpan={7} className="empty">No expenses</td></tr>}
           </tbody>
         </table>
       </div>
       {open && <ExpenseModal onSave={save} onClose={() => setOpen(false)} />}
+      {editTarget && (
+        <ExpenseEditModal
+          expense={editTarget}
+          isAdminRole={isAdminRole}
+          onSave={saveEdit}
+          onClose={() => setEditTarget(null)}
+        />
+      )}
+      {requestEditTarget && (
+        <ExpenseRequestEditModal
+          expense={requestEditTarget}
+          onSubmit={(proposed) => submitEditRequest(requestEditTarget, proposed)}
+          onClose={() => setRequestEditTarget(null)}
+        />
+      )}
+    </div>
+  );
+}
+
+/* Attachment cell — shows file list and upload dropzone */
+function AttachmentCell({ attachments, expenseId, canUpload, onAttach }: {
+  attachments: ExpenseAttachment[];
+  expenseId: string;
+  canUpload: boolean;
+  onAttach: (file: File) => void;
+}) {
+  const inputRef = useRef<HTMLInputElement>(null);
+  const [dragging, setDragging] = useState(false);
+
+  const handleFiles = (files: FileList | null) => {
+    if (!files) return;
+    Array.from(files).forEach(onAttach);
+  };
+
+  return (
+    <div style={{ display: "flex", flexDirection: "column", gap: "5px", minWidth: "160px" }}>
+      {(attachments || []).map((att: ExpenseAttachment, i: number) => (
+        <a key={i} href={att.url} target="_blank" rel="noopener noreferrer"
+          style={{ display: "flex", alignItems: "center", gap: "5px", fontSize: "12px", color: "#1f7a52", textDecoration: "none" }}
+          title={att.name}>
+          <FileIcon size={12} />
+          <span style={{ maxWidth: "110px", overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>{att.name}</span>
+          <Download size={11} />
+        </a>
+      ))}
+      {canUpload && (
+        <div
+          onDragOver={(e) => { e.preventDefault(); setDragging(true); }}
+          onDragLeave={() => setDragging(false)}
+          onDrop={(e) => { e.preventDefault(); setDragging(false); handleFiles(e.dataTransfer.files); }}
+          onClick={() => inputRef.current?.click()}
+          style={{
+            border: `1.5px dashed ${dragging ? "#1f7a52" : "#ccc"}`,
+            borderRadius: "7px",
+            padding: "5px 8px",
+            cursor: "pointer",
+            fontSize: "11px",
+            color: dragging ? "#1f7a52" : "#9aa4af",
+            display: "flex",
+            alignItems: "center",
+            gap: "5px",
+            background: dragging ? "rgba(31,122,82,0.05)" : "transparent",
+            transition: "all 0.15s"
+          }}
+        >
+          <Upload size={12} /> Drop or click to attach
+        </div>
+      )}
+      <input
+        ref={inputRef}
+        type="file"
+        accept=".pdf,.doc,.docx,.png,.jpg,.jpeg"
+        multiple
+        style={{ display: "none" }}
+        onChange={(e) => handleFiles(e.target.files)}
+      />
     </div>
   );
 }
@@ -541,7 +720,7 @@ function ExpenseModal({ onSave, onClose }: { onSave: (rec: any) => void; onClose
       <div className="form-grid">
         <Field label="Entity"><select value={f.company} onChange={set("company")}><option value="mortgage">Ezy Mortgage</option><option value="outsource">Ezy Outsource</option></select></Field>
         <Field label="Category"><select value={f.category} onChange={set("category")}>{EXPENSE_CATEGORIES.map((c) => <option key={c}>{c}</option>)}</select></Field>
-        <Field label={isSalary ? "Employee / Team (sub-category)" : "Detail / Sub-category"}><input value={f.sub} onChange={set("sub")} placeholder={isSalary ? "e.g. Sarah Lin" : "e.g. Rent, Xero"} /></Field>
+        <Field label={isSalary ? "Employee / Team" : "Detail / Sub-category"}><input value={f.sub} onChange={set("sub")} placeholder={isSalary ? "e.g. Sarah Lin" : "e.g. Rent, Xero"} /></Field>
         <Field label="Amount (AUD)"><input type="number" value={f.amount} onChange={set("amount")} /></Field>
         <Field label="Date"><input type="date" value={f.date} onChange={set("date")} /></Field>
         <Field label="Note" wide><input value={f.note} onChange={set("note")} /></Field>
@@ -554,9 +733,181 @@ function ExpenseModal({ onSave, onClose }: { onSave: (rec: any) => void; onClose
   );
 }
 
+function ExpenseEditModal({ expense, isAdminRole, onSave, onClose }: { expense: any; isAdminRole: boolean; onSave: (e: any) => void; onClose: () => void }) {
+  const [f, setF] = useState({ ...expense });
+  const set = (k: string) => (e: any) => setF({ ...f, [k]: e.target.value });
+  return (
+    <Modal title={isAdminRole ? "Edit Expense (Free First Edit)" : "Edit Expense"} onClose={onClose}>
+      {isAdminRole && (
+        <div style={{ background: "#fff3e0", border: "1px solid #ffcc80", borderRadius: "8px", padding: "10px 14px", marginBottom: "14px", fontSize: "13px", color: "#e65100" }}>
+          This is your one free edit. After saving, further edits will require Super Admin approval.
+        </div>
+      )}
+      <div className="form-grid">
+        <Field label="Entity"><select value={f.company} onChange={set("company")}><option value="mortgage">Ezy Mortgage</option><option value="outsource">Ezy Outsource</option></select></Field>
+        <Field label="Category"><select value={f.category} onChange={set("category")}>{EXPENSE_CATEGORIES.map((c) => <option key={c}>{c}</option>)}</select></Field>
+        <Field label="Detail / Sub-category"><input value={f.sub} onChange={set("sub")} /></Field>
+        <Field label="Amount (AUD)"><input type="number" value={f.amount} onChange={set("amount")} /></Field>
+        <Field label="Date"><input type="date" value={f.date} onChange={set("date")} /></Field>
+        <Field label="Note" wide><input value={f.note} onChange={set("note")} /></Field>
+      </div>
+      <div className="modal-foot">
+        <button className="btn" onClick={onClose}>Cancel</button>
+        <button className="btn primary" onClick={() => onSave({ ...f, amount: Number(f.amount) })}>Save Changes</button>
+      </div>
+    </Modal>
+  );
+}
+
+function ExpenseRequestEditModal({ expense, onSubmit, onClose }: { expense: any; onSubmit: (proposed: any) => void; onClose: () => void }) {
+  const [f, setF] = useState({ ...expense });
+  const set = (k: string) => (e: any) => setF({ ...f, [k]: e.target.value });
+  return (
+    <Modal title="Request Edit Approval" onClose={onClose}>
+      <div style={{ background: "#eef6ff", border: "1px solid #cfe2fb", borderRadius: "8px", padding: "10px 14px", marginBottom: "14px", fontSize: "13px", color: "#1f4e79" }}>
+        Your proposed changes will be sent to the Super Admin for approval. The expense will only be updated after approval.
+      </div>
+      <div className="form-grid">
+        <Field label="Entity"><select value={f.company} onChange={set("company")}><option value="mortgage">Ezy Mortgage</option><option value="outsource">Ezy Outsource</option></select></Field>
+        <Field label="Category"><select value={f.category} onChange={set("category")}>{EXPENSE_CATEGORIES.map((c) => <option key={c}>{c}</option>)}</select></Field>
+        <Field label="Detail / Sub-category"><input value={f.sub} onChange={set("sub")} /></Field>
+        <Field label="Amount (AUD)"><input type="number" value={f.amount} onChange={set("amount")} /></Field>
+        <Field label="Date"><input type="date" value={f.date} onChange={set("date")} /></Field>
+        <Field label="Note" wide><input value={f.note} onChange={set("note")} /></Field>
+      </div>
+      <div className="modal-foot">
+        <button className="btn" onClick={onClose}>Cancel</button>
+        <button className="btn primary" onClick={() => onSubmit({ company: f.company, category: f.category, sub: f.sub, amount: Number(f.amount), date: f.date, note: f.note })}>Submit for Approval</button>
+      </div>
+    </Modal>
+  );
+}
+
+/* ============================ APPROVALS ============================ */
+function Approvals({ db, commit, isSuperAdmin }: { db: any; commit: (next: any) => void; isSuperAdmin: boolean }) {
+  if (!isSuperAdmin) return <div className="locked"><Lock size={28}/><p>Only the Super Admin can review approval requests.</p></div>;
+
+  const pending = (db.editRequests || []).filter((r: any) => r.status === "pending");
+  const resolved = (db.editRequests || []).filter((r: any) => r.status !== "pending");
+
+  const getExpense = (id: string) => db.expenses.find((e: any) => e.id === id);
+
+  const approve = (req: any) => {
+    const expense = getExpense(req.expenseId);
+    if (!expense) return;
+    const updatedExpense = { ...expense, ...req.proposedChanges };
+    const updatedRequests = (db.editRequests || []).map((r: any) =>
+      r.id === req.id ? { ...r, status: "approved", resolvedAt: new Date().toISOString(), resolvedBy: "Super Admin" } : r
+    );
+    const updatedExpenses = db.expenses.map((e: any) =>
+      e.id === req.expenseId ? {
+        ...updatedExpense,
+        editRequests: (e.editRequests || []).map((er: any) => er.id === req.id ? { ...er, status: "approved" } : er)
+      } : e
+    );
+    commit({ ...db, editRequests: updatedRequests, expenses: updatedExpenses });
+  };
+
+  const reject = (req: any) => {
+    const updatedRequests = (db.editRequests || []).map((r: any) =>
+      r.id === req.id ? { ...r, status: "rejected", resolvedAt: new Date().toISOString(), resolvedBy: "Super Admin" } : r
+    );
+    const updatedExpenses = db.expenses.map((e: any) =>
+      e.id === req.expenseId ? {
+        ...e,
+        editRequests: (e.editRequests || []).map((er: any) => er.id === req.id ? { ...er, status: "rejected" } : er)
+      } : e
+    );
+    commit({ ...db, editRequests: updatedRequests, expenses: updatedExpenses });
+  };
+
+  return (
+    <div className="stack">
+      <div className="automation-note">
+        <ClipboardCheck size={18} />
+        <div>
+          <strong>Edit Approvals Queue:</strong> When an Admin role user has already used their one free edit, they must submit a change request. Review proposed changes below and approve or reject each one.
+        </div>
+      </div>
+
+      {pending.length === 0 && <div className="empty" style={{ paddingTop: "60px" }}>No pending approval requests</div>}
+
+      {pending.map((req: any) => {
+        const expense = getExpense(req.expenseId);
+        if (!expense) return null;
+        return (
+          <div key={req.id} className="panel" style={{ border: "1px solid #fdeccd" }}>
+            <div style={{ display: "flex", justifyContent: "space-between", alignItems: "flex-start", marginBottom: "14px" }}>
+              <div>
+                <div style={{ fontWeight: 700, fontSize: "14px" }}>Edit Request — <span style={{ color: "#d9930a" }}>{expense.sub}</span></div>
+                <div className="muted-sm">Requested by <strong>{req.requestedBy}</strong> · {new Date(req.requestedAt).toLocaleString("en-AU")}</div>
+              </div>
+              <span style={{ background: "#fdeccd", color: "#a8690a", fontSize: "11px", fontWeight: 700, padding: "3px 10px", borderRadius: "20px" }}>Pending</span>
+            </div>
+            <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: "16px", marginBottom: "16px" }}>
+              <div style={{ background: "#faf8f4", borderRadius: "10px", padding: "12px 16px" }}>
+                <div style={{ fontSize: "11px", textTransform: "uppercase", letterSpacing: ".5px", color: "#9aa4af", marginBottom: "8px" }}>Current Values</div>
+                {["category", "sub", "amount", "date", "note"].map(k => (
+                  <div key={k} style={{ display: "flex", justifyContent: "space-between", fontSize: "13px", padding: "3px 0", borderBottom: "1px solid #eee" }}>
+                    <span style={{ color: "#9aa4af", textTransform: "capitalize" }}>{k}</span>
+                    <span style={{ fontWeight: 500 }}>{k === "amount" ? fmt2(expense[k]) : (expense[k] || "—")}</span>
+                  </div>
+                ))}
+              </div>
+              <div style={{ background: "#f0fdf4", border: "1px solid #bbf7d0", borderRadius: "10px", padding: "12px 16px" }}>
+                <div style={{ fontSize: "11px", textTransform: "uppercase", letterSpacing: ".5px", color: "#1f7a52", marginBottom: "8px" }}>Proposed Changes</div>
+                {["category", "sub", "amount", "date", "note"].map(k => {
+                  const changed = req.proposedChanges[k] !== expense[k];
+                  return (
+                    <div key={k} style={{ display: "flex", justifyContent: "space-between", fontSize: "13px", padding: "3px 0", borderBottom: "1px solid rgba(31,122,82,0.15)" }}>
+                      <span style={{ color: "#9aa4af", textTransform: "capitalize" }}>{k}</span>
+                      <span style={{ fontWeight: 600, color: changed ? "#1f7a52" : "inherit" }}>
+                        {k === "amount" ? fmt2(req.proposedChanges[k]) : (req.proposedChanges[k] || "—")}
+                        {changed && " ✓"}
+                      </span>
+                    </div>
+                  );
+                })}
+              </div>
+            </div>
+            <div style={{ display: "flex", gap: "10px", justifyContent: "flex-end" }}>
+              <button className="btn" onClick={() => reject(req)} style={{ color: "#dc2626", borderColor: "#fca5a5" }}><X size={15}/> Reject</button>
+              <button className="btn primary" onClick={() => approve(req)}><CheckCircle2 size={15}/> Approve &amp; Apply</button>
+            </div>
+          </div>
+        );
+      })}
+
+      {resolved.length > 0 && (
+        <>
+          <div style={{ fontWeight: 600, fontSize: "13px", color: "#9aa4af", marginTop: "10px" }}>Resolved ({resolved.length})</div>
+          {resolved.map((req: any) => {
+            const expense = getExpense(req.expenseId);
+            return (
+              <div key={req.id} className="panel" style={{ opacity: 0.75 }}>
+                <div style={{ display: "flex", justifyContent: "space-between" }}>
+                  <div>
+                    <div style={{ fontWeight: 600, fontSize: "14px" }}>Edit Request — {expense?.sub || req.expenseId}</div>
+                    <div className="muted-sm">By {req.requestedBy} · Resolved {req.resolvedAt ? new Date(req.resolvedAt).toLocaleDateString("en-AU") : "—"}</div>
+                  </div>
+                  <span style={{
+                    background: req.status === "approved" ? "#dcf3e8" : "#fde2e1",
+                    color: req.status === "approved" ? "#1f7a52" : "#c0392b",
+                    fontSize: "11px", fontWeight: 700, padding: "3px 10px", borderRadius: "20px"
+                  }}>{req.status === "approved" ? "Approved" : "Rejected"}</span>
+                </div>
+              </div>
+            );
+          })}
+        </>
+      )}
+    </div>
+  );
+}
+
 /* ============================ INVOICES ============================ */
 function Invoices({ db, commit, scope, canEdit, isDarkMode }: { db: any; commit: (next: any) => void; scope: string; canEdit: boolean; isDarkMode: boolean }) {
-  const [activeTab, setActiveTab] = useState<"internal" | "xero_sales" | "xero_invoices" | any>("internal");
+  const [activeTab, setActiveTab] = useState<"internal" | "xero_sales" | any>("internal");
   const [open, setOpen] = useState(false);
   const [preview, setPreview] = useState<any>(null);
   const client = (id: string) => db.clients.find((c: any) => c.id === id);
@@ -564,54 +915,32 @@ function Invoices({ db, commit, scope, canEdit, isDarkMode }: { db: any; commit:
 
   const save = (inv: any) => {
     const number = "INV-" + (1000 + db.invoices.length + 1);
-    commit({ ...db, invoices: [...db.invoices, { ...inv, id: uid(), number, status: "sent" }] });
+    commit({ ...db, invoices: [...db.invoices, { ...inv, id: uid(), number, status: "sent", autoGenerated: false, emailSentAt: new Date().toISOString(), reminderSentAt: null, reminderSentCount: 0, lastMailLog: `Invoice created & sent ${new Date().toLocaleDateString("en-AU")}` }] });
     setOpen(false);
   };
-  const setStatus = (id: string, status: string) => commit({ ...db, invoices: db.invoices.map((i: any) => i.id === id ? { ...i, status } : i) });
+
+  const setStatus = (id: string, status: string) => commit({
+    ...db,
+    invoices: db.invoices.map((i: any) => i.id === id ? {
+      ...i,
+      status,
+      lastMailLog: status === "paid" ? `Marked paid ${new Date().toLocaleDateString("en-AU")}` : i.lastMailLog
+    } : i)
+  });
 
   return (
     <div className="stack">
-      {/* Sub tabs for Invoice System */}
-      <div style={{
-        display: "flex",
-        gap: "10px",
-        marginBottom: "20px",
-        borderBottom: "1px solid rgba(0, 74, 153, 0.16)",
-        paddingBottom: "12px",
-        flexWrap: "wrap"
-      }}>
-        <button
-          onClick={() => setActiveTab("xero_sales")}
-          style={{
-            padding: "8px 16px",
-            borderRadius: "8px",
-            border: "1px solid",
-            background: activeTab === "xero_sales" ? "#ff6900" : "transparent",
-            color: activeTab === "xero_sales" ? "#ffffff" : (isDarkMode ? "#ffffff" : "#000000"),
-            borderColor: activeTab === "xero_sales" ? "#ff6900" : (isDarkMode ? "#1e2633" : "#cbd5e1"),
-            fontWeight: "600",
-            cursor: "pointer",
-            transition: "all 0.15s ease",
-          }}
-        >
-          Invoice Overview
-        </button>
-        <button
-          onClick={() => setActiveTab("internal")}
-          style={{
-            padding: "8px 16px",
-            borderRadius: "8px",
-            border: "1px solid",
-            background: activeTab === "internal" ? "#ff6900" : "transparent",
-            color: activeTab === "internal" ? "#ffffff" : (isDarkMode ? "#ffffff" : "#000000"),
-            borderColor: activeTab === "internal" ? "#ff6900" : (isDarkMode ? "#1e2633" : "#cbd5e1"),
-            fontWeight: "600",
-            cursor: "pointer",
-            transition: "all 0.15s ease",
-          }}
-        >
-          Invoices List
-        </button>
+      {/* Sub tabs */}
+      <div style={{ display: "flex", gap: "10px", marginBottom: "20px", borderBottom: "1px solid rgba(0, 74, 153, 0.16)", paddingBottom: "12px", flexWrap: "wrap" }}>
+        {[["xero_sales", "Invoice Overview"], ["internal", "Invoices List"]].map(([key, label]) => (
+          <button key={key} onClick={() => setActiveTab(key)} style={{
+            padding: "8px 16px", borderRadius: "8px", border: "1px solid",
+            background: activeTab === key ? "#ff6900" : "transparent",
+            color: activeTab === key ? "#ffffff" : (isDarkMode ? "#ffffff" : "#000000"),
+            borderColor: activeTab === key ? "#ff6900" : (isDarkMode ? "#1e2633" : "#cbd5e1"),
+            fontWeight: 600, cursor: "pointer", transition: "all 0.15s ease",
+          }}>{label}</button>
+        ))}
       </div>
 
       {activeTab === "internal" ? (
@@ -619,24 +948,43 @@ function Invoices({ db, commit, scope, canEdit, isDarkMode }: { db: any; commit:
           <div className="automation-note">
             <Clock size={18} />
             <div>
-              <strong>Automation (built in production):</strong> on the 1st of each month invoices auto-email to the client, payment auto-marks the invoice paid, and an unpaid invoice triggers a reminder after 14 days — repeating until paid. In this prototype you can preview the email template and run the steps manually below.
+              <strong>Auto-Invoice System (Active via backend server):</strong> On the 1st of each month, invoices are auto-generated from each client's last invoice and emailed via Gmail SMTP. If unpaid after 14 days, a reminder email is automatically sent. Paid invoices never receive reminders.
             </div>
           </div>
           <Toolbar action={canEdit && <button className="btn primary" onClick={() => setOpen(true)}><Plus size={16}/> Create Invoice</button>} />
           <div className="table-wrap">
             <table>
-              <thead><tr><th>Invoice #</th><th>Client</th><th>Entity</th><th>Issued</th><th>Due</th><th className="r">Total (inc GST)</th><th>Status</th><th></th></tr></thead>
+              <thead>
+                <tr>
+                  <th>Invoice #</th><th>Client</th><th>Entity</th><th>Issued</th><th>Due</th>
+                  <th className="r">Total (inc GST)</th><th>Status</th><th>Email Log</th><th></th>
+                </tr>
+              </thead>
               <tbody>
                 {rows.map((inv: any) => {
                   const sub = invTotal(inv); const total = sub + gstOf(sub);
                   return (
                     <tr key={inv.id}>
-                      <td className="strong">{inv.number}</td>
+                      <td className="strong" style={{ display: "flex", alignItems: "center", gap: "6px" }}>
+                        {inv.number}
+                        {inv.autoGenerated && (
+                          <span style={{ background: "#ff6900", color: "#fff", fontSize: "9px", fontWeight: 700, padding: "1px 6px", borderRadius: "4px", letterSpacing: "0.05em" }}>AUTO</span>
+                        )}
+                      </td>
                       <td>{client(inv.clientId)?.name}</td>
                       <td><Tag>{inv.company === "mortgage" ? "Mortgage" : "Outsource"}</Tag></td>
-                      <td>{inv.issueDate}</td><td>{inv.dueDate}</td>
+                      <td>{inv.issueDate}</td>
+                      <td>{inv.dueDate}</td>
                       <td className="r strong">{fmt2(total)}</td>
                       <td><InvStatus status={inv.status} /></td>
+                      <td>
+                        <div style={{ fontSize: "11.5px", color: "#9aa4af" }}>
+                          {inv.lastMailLog || "—"}
+                          {inv.reminderSentCount > 0 && (
+                            <div style={{ color: "#d9930a", fontWeight: 600 }}>Reminder sent ×{inv.reminderSentCount}</div>
+                          )}
+                        </div>
+                      </td>
                       <td className="row-actions">
                         <button onClick={() => setPreview(inv)} title="View / Email template"><Mail size={15}/></button>
                         {canEdit && inv.status !== "paid" && <button onClick={() => setStatus(inv.id, "paid")} title="Mark paid"><CheckCircle2 size={15}/></button>}
@@ -644,24 +992,27 @@ function Invoices({ db, commit, scope, canEdit, isDarkMode }: { db: any; commit:
                     </tr>
                   );
                 })}
-                {!rows.length && <tr><td colSpan={8} className="empty">No invoices</td></tr>}
+                {!rows.length && <tr><td colSpan={9} className="empty">No invoices</td></tr>}
               </tbody>
             </table>
           </div>
           {open && <InvoiceModal db={db} onSave={save} onClose={() => setOpen(false)} />}
           {preview && <InvoicePreview inv={preview} client={client(preview.clientId)} onClose={() => setPreview(null)} />}
         </>
-      ) : activeTab === "xero_sales" ? (
-        <XeroSales isDarkMode={isDarkMode} />
       ) : (
-        <XeroInvoices isDarkMode={isDarkMode} />
+        <XeroSales isDarkMode={isDarkMode} />
       )}
     </div>
   );
 }
 
 function InvStatus({ status }: { status: string }) {
-  const map: Record<string, [string, string, React.ComponentType<any>]> = { paid: ["Paid", "green", CheckCircle2], sent: ["Sent", "amber", Send], overdue: ["Overdue", "red", AlertTriangle], draft: ["Draft", "slate", Clock] };
+  const map: Record<string, [string, string, React.ComponentType<any>]> = {
+    paid: ["Paid", "green", CheckCircle2],
+    sent: ["Sent", "amber", Send],
+    overdue: ["Overdue", "red", AlertTriangle],
+    draft: ["Draft", "slate", Clock]
+  };
   const [label, tone, Icon] = map[status] || map.draft;
   return <span className={`inv-status ${tone}`}><Icon size={13}/> {label}</span>;
 }
@@ -704,7 +1055,7 @@ function InvoiceModal({ db, onSave, onClose }: { db: any; onSave: (inv: any) => 
       </div>
       <div className="modal-foot">
         <button className="btn" onClick={onClose}>Cancel</button>
-        <button className="btn primary" disabled={!sub} onClick={() => onSave({ ...f, items: f.items.map((it: any) => ({ ...it, qty: Number(it.qty), price: Number(it.price) })) })}><Send size={15}/> Create & Send</button>
+        <button className="btn primary" disabled={!sub} onClick={() => onSave({ ...f, items: f.items.map((it: any) => ({ ...it, qty: Number(it.qty), price: Number(it.price) })) })}><Send size={15}/> Create &amp; Send</button>
       </div>
     </Modal>
   );
@@ -715,6 +1066,11 @@ function InvoicePreview({ inv, client, onClose }: { inv: any; client: any; onClo
   const entity = COMPANIES[inv.company as keyof typeof COMPANIES];
   return (
     <Modal title={`Email Template · ${inv.number}`} onClose={onClose} wide>
+      {inv.autoGenerated && (
+        <div style={{ background: "#fff3e0", border: "1px solid #ffcc80", borderRadius: "8px", padding: "8px 14px", marginBottom: "14px", fontSize: "12.5px", color: "#e65100", display: "flex", gap: "8px", alignItems: "center" }}>
+          <AlertCircle size={15}/> This invoice was auto-generated on the 1st of the month and emailed automatically.
+        </div>
+      )}
       <div className="email-preview">
         <div className="email-bar">To: {client?.email} &nbsp;·&nbsp; Subject: {inv.number} from {entity}</div>
         <div className="invoice-doc">
@@ -769,9 +1125,16 @@ function InvoicePreview({ inv, client, onClose }: { inv: any; client: any; onClo
 /* ============================ USER MANAGEMENT ============================ */
 function UsersMgmt({ db, commit, canEdit }: { db: any; commit: (next: any) => void; canEdit: boolean }) {
   const [open, setOpen] = useState(false);
-  if (!canEdit) return <div className="locked"><Lock size={28}/><p>Only the CEO can manage users.</p></div>;
+  if (!canEdit) return <div className="locked"><Lock size={28}/><p>Only the Super Admin can manage users.</p></div>;
+
   const save = (u: any) => { commit({ ...db, users: [...db.users, { ...u, id: uid() }] }); setOpen(false); };
   const remove = (id: string) => commit({ ...db, users: db.users.filter((u: any) => u.id !== id) });
+
+  const ROLE_DESCRIPTIONS: Record<string, string> = {
+    "Super Admin": "Full access to all sections including Approvals, User Management, and system configuration.",
+    "Manager": "Can view and input Income, Expense, and Invoice data.",
+    "Admin": "Can view and add Expenses, upload documents. One free edit per expense; further edits need Super Admin approval.",
+  };
 
   return (
     <div className="stack">
@@ -782,17 +1145,22 @@ function UsersMgmt({ db, commit, canEdit }: { db: any; commit: (next: any) => vo
             <div className="user-head">
               <div className="avatar">{u.name.split(" ").map((w: string)=>w[0]).slice(0,2).join("")}</div>
               <div><div className="strong">{u.name}</div><div className="muted-sm">{u.email}</div></div>
-              <span className={`role-pill ${u.role.toLowerCase()}`}>{u.role}</span>
+              <span className={`role-pill ${u.role.toLowerCase().replace(" ", "-")}`}>{u.role}</span>
+            </div>
+            <div style={{ fontSize: "12.5px", color: "#9aa4af", marginBottom: "14px", lineHeight: "1.5", padding: "10px 12px", background: "rgba(0,0,0,0.03)", borderRadius: "8px" }}>
+              {ROLE_DESCRIPTIONS[u.role] || "Standard access."}
             </div>
             <div className="perm-list">
-              {SECTIONS.map((s) => (
+              {SECTIONS.filter(s => s !== "approvals").map((s) => (
                 <div className="perm-row" key={s}>
                   <span>{NAV.find((n)=>n.key===s)?.label}</span>
-                  <span className={`perm-badge ${u.perms[s]}`}>{u.perms[s] === "edit" ? "Edit & Input" : u.perms[s] === "view" ? "View only" : "Hidden"}</span>
+                  <span className={`perm-badge ${u.perms[s] === "edit" ? "edit" : u.perms[s] === "none" ? "none" : "view"}`}>
+                    {u.perms[s] === "edit" ? "Edit & Input" : "Hidden"}
+                  </span>
                 </div>
               ))}
             </div>
-            {u.role !== "CEO" && <button className="btn ghost sm full" onClick={() => remove(u.id)}><Trash2 size={14}/> Remove</button>}
+            {u.role !== "Super Admin" && <button className="btn ghost sm full" onClick={() => remove(u.id)}><Trash2 size={14}/> Remove</button>}
           </div>
         ))}
       </div>
@@ -802,41 +1170,47 @@ function UsersMgmt({ db, commit, canEdit }: { db: any; commit: (next: any) => vo
 }
 
 function UserModal({ onSave, onClose }: { onSave: (u: any) => void; onClose: () => void }) {
-  const [f, setF] = useState<any>({ name: "", email: "", role: "Staff", perms: { overview: "view", clients: "view", income: "view", expense: "view", invoices: "view", users: "none" } });
-  const setPerm = (s: string, v: string) => setF({ ...f, perms: { ...f.perms, [s]: v } });
+  const [f, setF] = useState<any>({ name: "", email: "", role: "Admin" });
+  const preview = permsFor(f.role);
+
+  const ROLE_DESCRIPTIONS: Record<string, string> = {
+    "Super Admin": "Full access — all menus including Approvals, User Management.",
+    "Manager": "Income, Expense, Invoice — can add and input records.",
+    "Admin": "Expense only — can add expenses, upload memos/documents, one free edit per expense.",
+  };
+
   return (
-    <Modal title="Create User & Set Permissions" onClose={onClose} wide>
+    <Modal title="Create User" onClose={onClose} wide>
       <div className="form-grid">
         <Field label="Full Name"><input value={f.name} onChange={(e) => setF({...f, name: e.target.value})} /></Field>
         <Field label="Email"><input value={f.email} onChange={(e) => setF({...f, email: e.target.value})} /></Field>
         <Field label="Role">
-          <select value={f.role} onChange={(e) => {
-            const role = e.target.value;
-            setF({ ...f, role, perms: role === "CEO" ? fullPerms() : f.perms });
-          }}>
-            <option>CEO</option><option>Manager</option><option>Staff</option>
+          <select value={f.role} onChange={(e) => setF({ ...f, role: e.target.value })}>
+            <option>Super Admin</option>
+            <option>Manager</option>
+            <option>Admin</option>
           </select>
+        </Field>
+        <Field label="Role Description" wide>
+          <div style={{ padding: "10px 12px", background: "#f0fdf4", border: "1px solid #bbf7d0", borderRadius: "9px", fontSize: "13px", color: "#1f7a52" }}>
+            {ROLE_DESCRIPTIONS[f.role]}
+          </div>
         </Field>
       </div>
       <div className="perm-editor">
-        <div className="perm-editor-head">Section access</div>
-        {SECTIONS.map((s) => (
+        <div className="perm-editor-head">Section Access (auto-assigned by role)</div>
+        {SECTIONS.filter(s => s !== "approvals").map((s) => (
           <div className="perm-edit-row" key={s}>
             <span>{NAV.find((n)=>n.key===s)?.label}</span>
-            <div className="seg">
-              {["none","view","edit"].map((opt) => (
-                <button key={opt} className={f.perms[s] === opt ? "on" : ""} disabled={f.role === "CEO"} onClick={() => setPerm(s, opt)}>
-                  {opt === "none" ? "Hidden" : opt === "view" ? "View" : "Edit"}
-                </button>
-              ))}
-            </div>
+            <span className={`perm-badge ${preview[s] === "edit" ? "edit" : "none"}`}>
+              {preview[s] === "edit" ? "Edit & Input" : "Hidden"}
+            </span>
           </div>
         ))}
-        {f.role === "CEO" && <p className="muted-sm" style={{padding:"6px 14px"}}>CEO automatically has full access to everything.</p>}
       </div>
       <div className="modal-foot">
         <button className="btn" onClick={onClose}>Cancel</button>
-        <button className="btn primary" disabled={!f.name} onClick={() => onSave(f)}>Create User</button>
+        <button className="btn primary" disabled={!f.name} onClick={() => onSave({ ...f, perms: permsFor(f.role) })}>Create User</button>
       </div>
     </Modal>
   );
@@ -946,7 +1320,7 @@ function Styles() {
   .dark .btn.ghost:hover { border-color: #ff6900; color: #ff6900; }
 
   /* sidebar */
-  .sidebar { width: 248px; background:#11161c; color:#cdd3da; display:flex; flex-direction:column; padding:22px 16px; position:sticky; top:0; height:100vh; }
+  .sidebar { width: 248px; background:#11161c; color:#cdd3da; display:flex; flex-direction:column; padding:22px 16px; position:sticky; top:0; height:100vh; overflow-y:auto; }
   .brand { display:flex; gap:12px; align-items:center; padding:0 6px 22px; }
   .logo { width:42px; height:42px; border-radius:11px; background:linear-gradient(135deg,#1f7a52,#2bb673); color:#fff; font-weight:700; display:grid; place-items:center; letter-spacing:.5px; font-size:15px; }
   .logo.big { width:64px; height:64px; font-size:22px; border-radius:16px; }
@@ -1011,7 +1385,7 @@ function Styles() {
   tbody tr:hover { background:#fcfbf8; }
   .strong { font-weight:600; } .r { text-align:right; } th.r { text-align:right; }
   .muted-sm { color:#a3acb6; font-size:12.5px; margin-top:2px; }
-  .row-actions { display:flex; gap:6px; justify-content:flex-end; }
+  .row-actions { display:flex; gap:6px; justify-content:flex-end; align-items:center; }
   .row-actions button { border:none; background:#f3f1ec; width:30px; height:30px; border-radius:8px; cursor:pointer; color:#6b7280; display:grid; place-items:center; }
   .row-actions button:hover { background:#e9e5dd; color:#11161c; }
   .tag { background:#eef2f4; color:#516170; font-size:12px; padding:3px 9px; border-radius:20px; font-weight:500; }
@@ -1029,7 +1403,7 @@ function Styles() {
   /* modal */
   .overlay { position:fixed; inset:0; background:rgba(17,22,28,.5); display:grid; place-items:center; padding:20px; z-index:50; }
   .modal { background:#fff; border-radius:18px; width:520px; max-width:100%; max-height:90vh; overflow:auto; }
-  .modal.wide { width:680px; }
+  .modal.wide { width:720px; }
   .modal-head { display:flex; justify-content:space-between; align-items:center; padding:18px 22px; border-bottom:1px solid #eee; }
   .modal-head h3 { margin:0; font-family:'Fraunces',serif; font-size:20px; }
   .modal-head button { border:none; background:#f3f1ec; width:32px; height:32px; border-radius:8px; cursor:pointer; }
@@ -1061,7 +1435,8 @@ function Styles() {
   .inv-meta { text-align:right; } .inv-tax { font-family:'Fraunces',serif; font-size:18px; color:#1f7a52; font-weight:600; }
   .inv-bill { display:flex; justify-content:space-between; margin:22px 0; font-size:13.5px; }
   .lbl { font-size:11px; text-transform:uppercase; letter-spacing:.5px; color:#9aa4af; margin-bottom:3px; }
-  .inv-table { margin:8px 0; } .inv-table th { background:#faf8f4; font-size:11px; }
+  .inv-table { margin:8px 0; width:100%; border-collapse:collapse; } .inv-table th { background:#faf8f4; font-size:11px; padding:8px 12px; text-align:left; }
+  .inv-table td { padding:8px 12px; font-size:13px; }
   .inv-totals { display:flex; flex-direction:column; gap:6px; align-items:flex-end; margin:14px 0; }
   .inv-totals div { display:flex; gap:50px; font-size:13.5px; color:#6b7280; }
   .inv-totals .grand { font-size:16px; font-weight:700; color:#1a1d21; border-top:2px solid #11161c; padding-top:7px; }
@@ -1074,9 +1449,12 @@ function Styles() {
   .user-grid { display:grid; grid-template-columns:repeat(auto-fill,minmax(300px,1fr)); gap:18px; }
   .user-card { background:#fff; border:1px solid #eae6df; border-radius:16px; padding:20px; }
   .user-head { display:flex; align-items:center; gap:12px; margin-bottom:16px; }
-  .avatar { width:44px; height:44px; border-radius:12px; background:#11161c; color:#fff; display:grid; place-items:center; font-weight:600; font-size:15px; }
-  .role-pill { margin-left:auto; font-size:11.5px; font-weight:700; padding:4px 11px; border-radius:20px; text-transform:uppercase; letter-spacing:.4px; }
-  .role-pill.ceo { background:#1f7a52; color:#fff; } .role-pill.manager { background:#eef6ff; color:#1f4e79; } .role-pill.staff { background:#f3f1ec; color:#6b7280; }
+  .avatar { width:44px; height:44px; border-radius:12px; background:#11161c; color:#fff; display:grid; place-items:center; font-weight:600; font-size:15px; flex-shrink:0; }
+  .role-pill { margin-left:auto; font-size:11.5px; font-weight:700; padding:4px 11px; border-radius:20px; text-transform:uppercase; letter-spacing:.4px; white-space:nowrap; }
+  .role-pill.super-admin { background:#1f7a52; color:#fff; }
+  .role-pill.manager { background:#eef6ff; color:#1f4e79; }
+  .role-pill.admin { background:#f3f1ec; color:#6b7280; }
+  .role-pill.ceo { background:#1f7a52; color:#fff; }
   .perm-list { display:flex; flex-direction:column; gap:6px; margin-bottom:14px; }
   .perm-row { display:flex; justify-content:space-between; font-size:13px; color:#516170; }
   .perm-badge { font-size:11.5px; font-weight:600; padding:2px 9px; border-radius:6px; }
@@ -1084,11 +1462,7 @@ function Styles() {
   .perm-editor { margin-top:18px; border:1px solid #eee; border-radius:12px; overflow:hidden; }
   .perm-editor-head { background:#faf8f4; padding:11px 14px; font-size:12px; text-transform:uppercase; letter-spacing:.5px; color:#9aa4af; }
   .perm-edit-row { display:flex; justify-content:space-between; align-items:center; padding:11px 14px; border-top:1px solid #f2efe9; font-size:14px; }
-  .seg { display:flex; background:#f1efe9; border-radius:8px; padding:2px; }
-  .seg button { border:none; background:none; padding:6px 13px; border-radius:6px; font-family:inherit; font-size:12.5px; color:#6b7280; cursor:pointer; }
-  .seg button.on { background:#fff; color:#11161c; font-weight:600; box-shadow:0 1px 2px rgba(0,0,0,.1); }
-  .seg button:disabled { opacity:.4; cursor:not-allowed; }
   .locked { text-align:center; padding:70px 0; color:#a3acb6; } .locked p { margin-top:10px; }
-  @media (max-width:640px){ .sidebar{ display:none; } .form-grid{ grid-template-columns:1fr; } .field.wide{ grid-column:auto; } }
+  @media (max-width:640px){ .sidebar{ display:none; } .form-grid{ grid-template-columns:1fr; } .field.wide{ grid-column:auto; } .modal.wide{ width:calc(100vw - 40px); } }
   `}</style>;
 }

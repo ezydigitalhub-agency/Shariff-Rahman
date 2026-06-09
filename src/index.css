@@ -242,3 +242,154 @@ button[style*="background: rgb(255, 105, 0)"]:hover {
   box-shadow: 0 0 10px rgba(255, 105, 0, 0.3) !important;
 }
 
+/* ================================================================
+   SHARED DESIGN TOKENS — main page matches admin panel style
+   ================================================================ */
+
+/* Primary Button — green #1f7a52 (matches .btn.primary in AdminPanel) */
+.btn-primary-page {
+  display: inline-flex;
+  align-items: center;
+  gap: 7px;
+  padding: 11px 28px;
+  border-radius: 10px;
+  border: 1px solid #1f7a52;
+  background: #1f7a52;
+  font-family: inherit;
+  font-size: 13px;
+  font-weight: 600;
+  color: #ffffff !important;
+  cursor: pointer;
+  transition: all 0.15s ease;
+  text-transform: uppercase;
+  letter-spacing: 0.06em;
+}
+.btn-primary-page:hover {
+  background: #1a6645 !important;
+  border-color: #1a6645;
+  color: #ffffff !important;
+  box-shadow: 0 4px 14px rgba(31, 122, 82, 0.35);
+  transform: translateY(-1px);
+}
+
+/* Ghost Button — dashed border, orange on hover (matches .btn.ghost in AdminPanel) */
+.btn-ghost-page {
+  display: inline-flex;
+  align-items: center;
+  gap: 7px;
+  padding: 11px 28px;
+  border-radius: 10px;
+  border: 1.5px dashed rgba(255, 255, 255, 0.25);
+  background: transparent;
+  font-family: inherit;
+  font-size: 13px;
+  font-weight: 600;
+  color: #9aa4af;
+  cursor: pointer;
+  transition: all 0.15s ease;
+  text-transform: uppercase;
+  letter-spacing: 0.06em;
+}
+.btn-ghost-page:hover {
+  border-color: #ff6900 !important;
+  color: #ff6900 !important;
+  background: rgba(255, 105, 0, 0.06) !important;
+  box-shadow: 0 0 0 0 transparent;
+  transform: translateY(-1px);
+}
+html:not(.dark) .btn-ghost-page {
+  border-color: rgba(0, 74, 153, 0.3);
+  color: #516170;
+}
+html:not(.dark) .btn-ghost-page:hover {
+  border-color: #ff6900 !important;
+  color: #ff6900 !important;
+}
+
+/* Orange Button — brand orange #ff6900 (matches active invoice tabs in AdminPanel) */
+.btn-orange-page {
+  display: inline-flex;
+  align-items: center;
+  gap: 7px;
+  padding: 11px 28px;
+  border-radius: 10px;
+  border: 1px solid #ff6900;
+  background: #ff6900;
+  font-family: inherit;
+  font-size: 13px;
+  font-weight: 600;
+  color: #ffffff !important;
+  cursor: pointer;
+  transition: all 0.15s ease;
+  text-transform: uppercase;
+  letter-spacing: 0.06em;
+}
+.btn-orange-page:hover {
+  background: #ff5500 !important;
+  border-color: #ff5500;
+  color: #ffffff !important;
+  box-shadow: 0 0 14px rgba(255, 105, 0, 0.5);
+  transform: translateY(-1px);
+}
+
+/* Service Tab Pills — matches admin panel invoice tab style */
+.tab-pill-active {
+  background: #ff6900;
+  color: #ffffff;
+  border: 1px solid #ff6900;
+  padding: 8px 20px;
+  border-radius: 8px;
+  font-weight: 600;
+  font-size: 12px;
+  text-transform: uppercase;
+  letter-spacing: 0.05em;
+  cursor: pointer;
+  transition: all 0.15s ease;
+}
+.tab-pill-inactive {
+  background: transparent;
+  color: #9aa4af;
+  border: 1px solid transparent;
+  padding: 8px 20px;
+  border-radius: 8px;
+  font-weight: 600;
+  font-size: 12px;
+  text-transform: uppercase;
+  letter-spacing: 0.05em;
+  cursor: pointer;
+  transition: all 0.15s ease;
+}
+.tab-pill-inactive:hover {
+  color: #ffffff !important;
+  border-color: rgba(255, 255, 255, 0.15) !important;
+  background: rgba(255, 255, 255, 0.05) !important;
+}
+html:not(.dark) .tab-pill-inactive { color: #516170; }
+html:not(.dark) .tab-pill-inactive:hover { color: #1a1d21 !important; background: rgba(0,0,0,0.04) !important; }
+
+/* Card Panel — matches .stat / .panel card style in AdminPanel */
+.card-panel-page {
+  border-radius: 14px;
+  border: 1px solid #eae6df;
+  background: #ffffff;
+  padding: 24px;
+  transition: border-color 0.2s, box-shadow 0.2s;
+}
+.card-panel-page:hover {
+  border-color: rgba(31, 122, 82, 0.3);
+  box-shadow: 0 4px 20px rgba(31, 122, 82, 0.08);
+}
+.dark .card-panel-page {
+  background: #111620;
+  border-color: #1e2633;
+}
+.dark .card-panel-page:hover {
+  border-color: rgba(255, 105, 0, 0.25);
+  box-shadow: 0 4px 20px rgba(255, 105, 0, 0.07);
+}
+
+/* Card with left accent border — matches .stat tone colours */
+.card-panel-page.accent-green { border-left: 4px solid #1f7a52; }
+.card-panel-page.accent-orange { border-left: 4px solid #ff6900; }
+.card-panel-page.accent-blue   { border-left: 4px solid #004A99; }
+

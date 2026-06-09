@@ -266,14 +266,14 @@ export default function App() {
             >
               <button
                 onClick={() => handleScrollToSection("contact")}
-                className="px-8 py-3.5 bg-blue-600 hover:bg-blue-500 text-white rounded-full font-semibold text-xs uppercase tracking-wider transition-all duration-300 hover:scale-105 hover:shadow-[0_0_20px_rgba(37,99,235,0.4)]"
+                className="btn-primary-page"
               >
                 Initiate Assessment
               </button>
 
               <button
                 onClick={() => handleScrollToSection("services")}
-                className="px-8 py-3.5 border border-white/20 hover:border-white hover:bg-white/5 text-zinc-300 hover:text-white rounded-full font-semibold text-xs uppercase tracking-wider transition-all duration-300 hover:scale-105"
+                className="btn-ghost-page"
               >
                 Services Overview
               </button>
@@ -411,78 +411,70 @@ export default function App() {
           </p>
         </div>
 
-        {/* Tab Pills Selection (Matches original video pills layout style) */}
+        {/* Tab Pills Selection — matches admin panel invoice tab style */}
         <div className="flex justify-center mb-10">
-          <div className="flex bg-zinc-900/60 border border-zinc-800 p-1 rounded-full backdrop-blur-lg">
+          <div className={`flex p-1 rounded-xl gap-2 ${isDarkMode ? "bg-[#151c28] border border-[#1e2633]" : "bg-[#f1efe9] border border-[#eae6df]"}`}>
             <button
               onClick={() => setActiveServiceTab("loans")}
-              className={`px-6 py-2 text-xs font-semibold rounded-full uppercase tracking-wider transition ${
-                activeServiceTab === "loans"
-                  ? "bg-blue-500/20 text-blue-400 border border-blue-500/30"
-                  : "text-zinc-400 hover:text-white"
-              }`}
+              className={activeServiceTab === "loans" ? "tab-pill-active" : "tab-pill-inactive"}
             >
-              Mortgage & Financing
+              Mortgage &amp; Financing
             </button>
             <button
               onClick={() => setActiveServiceTab("support")}
-              className={`px-6 py-2 text-xs font-semibold rounded-full uppercase tracking-wider transition ${
-                activeServiceTab === "support"
-                  ? "bg-blue-500/20 text-blue-400 border border-blue-500/30"
-                  : "text-zinc-400 hover:text-white"
-              }`}
+              className={activeServiceTab === "support" ? "tab-pill-active" : "tab-pill-inactive"}
             >
               Broker Support (MBAT)
             </button>
           </div>
         </div>
 
-        {/* Dynamic Tab Cards Content */}
+        {/* Dynamic Tab Cards Content — card-panel-page matches AdminPanel stat/panel style */}
         <div className="grid md:grid-cols-3 gap-6 mb-12 text-left">
           {activeServiceTab === "loans" ? (
             <>
               {/* Home Purchase */}
-              <div className="bg-zinc-950/40 border border-zinc-900/80 rounded-2xl p-6 space-y-4 hover:border-blue-500/20 transition group">
-                <div className="w-10 h-10 rounded-xl bg-blue-500/10 flex items-center justify-center text-blue-400 border border-blue-500/20 group-hover:scale-105 duration-200">
+              <div className="card-panel-page accent-green space-y-4 group">
+                <div className="w-10 h-10 rounded-xl flex items-center justify-center group-hover:scale-105 duration-200" style={{ background: "rgba(31,122,82,0.12)", color: "#1f7a52", border: "1px solid rgba(31,122,82,0.25)" }}>
                   <TrendingDown className="w-5 h-5" />
                 </div>
-                <h4 className="text-base font-bold text-white tracking-tight">Competitive Purchase Loans</h4>
-                <p className="text-xs text-zinc-400 leading-relaxed">
+                <h4 className={`text-base font-bold tracking-tight ${isDarkMode ? "text-white" : "text-zinc-900"}`}>Competitive Purchase Loans</h4>
+                <p className={`text-xs leading-relaxed ${isDarkMode ? "text-zinc-400" : "text-zinc-600"}`}>
                   Tailored loan structures for first-home buyers, upgraders, and seasoned real estate investors. Utilizing state-of-the-art matching algorithms to pair your scenario with the correct lender parameters.
                 </p>
-                <ul className="text-[10px] text-zinc-500 space-y-1 font-mono pt-2 border-t border-zinc-900">
+                <ul className={`text-[10px] space-y-1 font-mono pt-2 border-t ${isDarkMode ? "text-zinc-500 border-zinc-800" : "text-zinc-500 border-zinc-200"}`}>
                   <li>• First Home Grant advice and structuring</li>
-                  <li>• Complete comparison of Big 4 & boutique lenders</li>
+                  <li>• Complete comparison of Big 4 &amp; boutique lenders</li>
                   <li>• Maximum borrowing capacity assessments</li>
                 </ul>
               </div>
 
               {/* Loan Refinance */}
-              <div className="bg-zinc-950/40 border border-zinc-900/80 rounded-2xl p-6 space-y-4 hover:border-blue-500/20 transition group">
-                <div className="w-10 h-10 rounded-xl bg-blue-500/10 flex items-center justify-center text-blue-400 border border-blue-500/20 group-hover:scale-105 duration-200">
+              <div className="card-panel-page accent-orange space-y-4 group">
+                <div className="w-10 h-10 rounded-xl flex items-center justify-center group-hover:scale-105 duration-200" style={{ background: "rgba(255,105,0,0.1)", color: "#ff6900", border: "1px solid rgba(255,105,0,0.2)" }}>
                   <Percent className="w-5 h-5" />
                 </div>
-                <h4 className="text-base font-bold text-white tracking-tight">Home Loan Refinancing</h4>
-                <p className="text-xs text-zinc-400 leading-relaxed">
+                <h4 className={`text-base font-bold tracking-tight ${isDarkMode ? "text-white" : "text-zinc-900"}`}>Home Loan Refinancing</h4>
+                <p className={`text-xs leading-relaxed ${isDarkMode ? "text-zinc-400" : "text-zinc-600"}`}>
                   Is your bank taking you for granted? Refinance to unlock competitive discount rates, restructure loan segments, consolidate auxiliary debts, and unlock equity reserves for home improvements or equity reinvesting.
                 </p>
-                <ul className="text-[10px] text-zinc-500 space-y-1 font-mono pt-2 border-t border-zinc-900">
-                  <li>• Cash backs & fee rebate tracking</li>
+                <ul className={`text-[10px] space-y-1 font-mono pt-2 border-t ${isDarkMode ? "text-zinc-500 border-zinc-800" : "text-zinc-500 border-zinc-200"}`}>
+                  <li>• Cash backs &amp; fee rebate tracking</li>
                   <li>• Interest rate deduction audits</li>
                   <li>• Variable vs Fixed segmentation</li>
                 </ul>
               </div>
 
               {/* Commercial Loans */}
-              <div className="bg-zinc-950/40 border border-zinc-900/80 rounded-2xl p-6 space-y-4 hover:border-blue-500/20 transition group">
-                <div className="w-10 h-10 rounded-xl bg-blue-500/10 flex items-center justify-center text-blue-400 border border-blue-500/20 group-hover:scale-105 duration-200">
+              <div className="card-panel-page accent-blue space-y-4 group">
+                <div className="w-10 h-10 rounded-xl flex items-center justify-center group-hover:scale-105 duration-200" style={{ background: "rgba(0,74,153,0.1)", color: "#004A99", border: "1px solid rgba(0,74,153,0.2)" }}>
                   <Compass className="w-5 h-5" />
                 </div>
-                <h4 className="text-base font-bold text-white tracking-tight">Commercial & Asset Finance</h4>
-                <p className="text-xs text-zinc-400 leading-relaxed">
+                <h4 className={`text-base font-bold tracking-tight ${isDarkMode ? "text-white" : "text-zinc-900"}`}>Commercial &amp; Asset Finance</h4>
+                <p className={`text-xs leading-relaxed ${isDarkMode ? "text-zinc-400" : "text-zinc-600"}`}>
                   Funding pathways for properties under commercial titles, property developments, machinery purchases, business expansions, and cash flow structures. Fast approvals via specialized commercial lenders.
                 </p>
-                <ul className="text-[10px] text-zinc-500 space-y-1 font-mono pt-2 border-t border-zinc-900">
+                <ul className={`text-[10px] space-y-1 font-mono pt-2 border-t ${isDarkMode ? "text-zinc-500 border-zinc-800" : "text-zinc-500 border-zinc-200"}`}>
                   <li>• Low-Doc commercial lending guidelines</li>
                   <li>• Asset, vehicle, and equipment lease lines</li>
                   <li>• Flexible repayment schedule alignments</li>
@@ -492,31 +484,31 @@ export default function App() {
           ) : (
             <>
               {/* Back Office Processing */}
-              <div className="bg-zinc-950/40 border border-zinc-900/80 rounded-2xl p-6 space-y-4 hover:border-blue-500/20 transition group">
-                <div className="w-10 h-10 rounded-xl bg-blue-500/10 flex items-center justify-center text-blue-400 border border-blue-500/20 group-hover:scale-105 duration-200">
+              <div className="card-panel-page accent-green space-y-4 group">
+                <div className="w-10 h-10 rounded-xl flex items-center justify-center group-hover:scale-105 duration-200" style={{ background: "rgba(31,122,82,0.12)", color: "#1f7a52", border: "1px solid rgba(31,122,82,0.25)" }}>
                   <CheckCircle2 className="w-5 h-5" />
                 </div>
-                <h4 className="text-base font-bold text-white tracking-tight">End-to-End Loan Processing</h4>
-                <p className="text-xs text-zinc-400 leading-relaxed">
+                <h4 className={`text-base font-bold tracking-tight ${isDarkMode ? "text-white" : "text-zinc-900"}`}>End-to-End Loan Processing</h4>
+                <p className={`text-xs leading-relaxed ${isDarkMode ? "text-zinc-400" : "text-zinc-600"}`}>
                   Free up your calendar and spend more time shaking hands with clients. MBAT represents a premium outsourced processing arm handling backend calculations, lender packet generation, and data compilation.
                 </p>
-                <ul className="text-[10px] text-zinc-500 space-y-1 font-mono pt-2 border-t border-zinc-900">
+                <ul className={`text-[10px] space-y-1 font-mono pt-2 border-t ${isDarkMode ? "text-zinc-500 border-zinc-800" : "text-zinc-500 border-zinc-200"}`}>
                   <li>• Accurate lender validation checks</li>
-                  <li>• Full packaging logic & CRM uploads</li>
+                  <li>• Full packaging logic &amp; CRM uploads</li>
                   <li>• Continuous tracking until Settlement</li>
                 </ul>
               </div>
 
               {/* CRM & Virtual Assistant */}
-              <div className="bg-zinc-950/40 border border-zinc-900/80 rounded-2xl p-6 space-y-4 hover:border-blue-500/20 transition group">
-                <div className="w-10 h-10 rounded-xl bg-blue-500/10 flex items-center justify-center text-blue-400 border border-blue-500/20 group-hover:scale-105 duration-200">
+              <div className="card-panel-page accent-orange space-y-4 group">
+                <div className="w-10 h-10 rounded-xl flex items-center justify-center group-hover:scale-105 duration-200" style={{ background: "rgba(255,105,0,0.1)", color: "#ff6900", border: "1px solid rgba(255,105,0,0.2)" }}>
                   <Users className="w-5 h-5" />
                 </div>
-                <h4 className="text-base font-bold text-white tracking-tight">Asynchronous Virtual Assistant</h4>
-                <p className="text-xs text-zinc-400 leading-relaxed">
+                <h4 className={`text-base font-bold tracking-tight ${isDarkMode ? "text-white" : "text-zinc-900"}`}>Asynchronous Virtual Assistant</h4>
+                <p className={`text-xs leading-relaxed ${isDarkMode ? "text-zinc-400" : "text-zinc-600"}`}>
                   Structured CRM data entry, automated email sequences, document checklist triggers, and customer query desks tailored entirely for active boutique mortgage brokers seeking systematic leverage.
                 </p>
-                <ul className="text-[10px] text-zinc-500 space-y-1 font-mono pt-2 border-t border-zinc-900">
+                <ul className={`text-[10px] space-y-1 font-mono pt-2 border-t ${isDarkMode ? "text-zinc-500 border-zinc-800" : "text-zinc-500 border-zinc-200"}`}>
                   <li>• CRM record audits and cleanups</li>
                   <li>• Client follow-up reminder matrices</li>
                   <li>• Post-settlement client care automation</li>
@@ -524,15 +516,15 @@ export default function App() {
               </div>
 
               {/* Mentor Services */}
-              <div className="bg-zinc-950/40 border border-zinc-900/80 rounded-2xl p-6 space-y-4 hover:border-blue-500/20 transition group">
-                <div className="w-10 h-10 rounded-xl bg-blue-500/10 flex items-center justify-center text-blue-400 border border-blue-500/20 group-hover:scale-105 duration-200">
+              <div className="card-panel-page accent-blue space-y-4 group">
+                <div className="w-10 h-10 rounded-xl flex items-center justify-center group-hover:scale-105 duration-200" style={{ background: "rgba(0,74,153,0.1)", color: "#004A99", border: "1px solid rgba(0,74,153,0.2)" }}>
                   <User className="w-5 h-5" />
                 </div>
-                <h4 className="text-base font-bold text-white tracking-tight">Approved Mentoring Pathway</h4>
-                <p className="text-xs text-zinc-400 leading-relaxed">
-                  MFAA & FBAA accredited mentorship for emerging brokers looking to satisfy strict first-two-year compliance guidelines. Learn loan structuring, client management, and aggregate parameters.
+                <h4 className={`text-base font-bold tracking-tight ${isDarkMode ? "text-white" : "text-zinc-900"}`}>Approved Mentoring Pathway</h4>
+                <p className={`text-xs leading-relaxed ${isDarkMode ? "text-zinc-400" : "text-zinc-600"}`}>
+                  MFAA &amp; FBAA accredited mentorship for emerging brokers looking to satisfy strict first-two-year compliance guidelines. Learn loan structuring, client management, and aggregate parameters.
                 </p>
-                <ul className="text-[10px] text-zinc-500 space-y-1 font-mono pt-2 border-t border-zinc-900">
+                <ul className={`text-[10px] space-y-1 font-mono pt-2 border-t ${isDarkMode ? "text-zinc-500 border-zinc-800" : "text-zinc-500 border-zinc-200"}`}>
                   <li>• Official MFAA/FBAA sign-offs</li>
                   <li>• One-on-one deal construction audits</li>
                   <li>• Broker business development strategies</li>
